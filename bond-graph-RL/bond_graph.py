@@ -93,6 +93,11 @@ class OneJunction(BondGraphNode):
         super().__init__(port_type=BondGraphPortTypes.ONE_JUNCTION, max_ports=None)
         pass
     
+class ZeroJunction(BondGraphNode):
+    def __init__(self):
+        super().__init__(port_type=BondGraphPortTypes.ZERO_JUNCTION, max_ports=None)
+        pass
+    
 
 
 
@@ -120,6 +125,12 @@ class BondGraph():
     
     # Restrictive addition of ports (only allows valid bond graph ports)
     def add_port(self, port:BondGraphNode):
+        """
+        Adds a port to the bond graph. The port is labeled according to its type and the index of the port.
+
+        Args:
+            port (BondGraphNode): Specify the type of port to add to the bond graph. Each of the standard bond graph ports inherits the BondGraphNode class.
+        """
         port_label = ""
         match port.port_type:
             case BondGraphPortTypes.CAPACITANCE:
@@ -138,11 +149,11 @@ class BondGraph():
                 port_label = f"1_{self.i}"
         self.graph.add_node(port_label, data=port)
         self.i += 1
+        return
     
     def add_bond(self, u, v, imposed_causality:GeneralizedVariables):
         """
         Creates a bond graph bond between nodes u and v. The directed edge corresponds to energy sign (i.e. power flows from the source node to the target node).
-
         Args:
             u (_type_): 
             v (_type_): _description_
@@ -154,3 +165,4 @@ class BondGraph():
         return
     
     def get_possible_bonds():
+        return
