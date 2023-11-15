@@ -30,7 +30,7 @@ class GeneralizedVariables(Enum):
     DISPLACEMENT = 3
     
 class BondGraphNode:
-    def __init__(self, port_type:BondGraphPortTypes, max_ports:int):
+    def __init__(self, port_type:BondGraphPortTypes, max_ports:int, preferred_causality:GeneralizedVariables=None):
         self.port_type = port_type
         self.max_ports = max_ports
         
@@ -48,29 +48,26 @@ class BondGraphNode:
                 return None
     
     def get_effort_expr(self):
-        match self.port_type:
-            case BondGraphPortTypes.CAPACITANCE:
-                return
-            case BondGraphPortTypes.INERTANCE:
-                return
-            case BondGraphPortTypes.RESISTANCE:
-                return
-            case BondGraphPortTypes.EFFORT_SOURCE:
-                return
-            case BondGraphPortTypes.FLOW_SOURCE:
-                return
-            case BondGraphPortTypes.ZERO_JUNCTION:
-                return
-            case BondGraphPortTypes.ONE_JUNCTION:
-                return
+        pass
+    
+    def get_flow_expr(self):
+        pass
             
             
 class Capacitance(BondGraphNode):
     def __init__(self, capacitance):
-        super().__init__(port_type=BondGraphPortTypes.CAPACITANCE, max_ports=1)
+        super().__init__(port_type=BondGraphPortTypes.CAPACITANCE, max_ports=1, preferred_causality=GeneralizedVariables.FLOW)
         self.C = capacitance
         pass
     
+    def get_effort_expr(self):
+        self.e = self.q/self.C
+        return self.e
+    
+    def get_flow_expr(self):
+        self.f = C * 
+    
+    def 
 class Inertance(BondGraphNode):
     def __init__(self, inertance):
         super().__init__(port_type=BondGraphPortTypes.INERTANCE, max_ports=1)
@@ -82,6 +79,7 @@ class Compliance(BondGraphNode):
         super().__init__(port_type=BondGraphPortTypes.COMPLIANCE, max_ports=1)
         self.I = compliance
         pass
+    
 
 class EffortSource(BondGraphNode):
     def __init__(self):
@@ -92,7 +90,16 @@ class OneJunction(BondGraphNode):
     def __init__(self):
         super().__init__(port_type=BondGraphPortTypes.ONE_JUNCTION, max_ports=None)
         pass
-    
+class Transformer(BondGraphNode):
+    def __init__(self, transformer_ratio):
+        super().__init__(port_type=BondGraphPortTypes.TRANSFORMER, max_ports=2)
+        self.tf_ratio = tf_ratio
+        pass
+class Gyrator(BondGraphNode):
+    def __init__(self, gyrator_ratio):
+        super().__init__(port_type=BondGraphPortTypes.GYRATOR, max_ports=2)
+        self.gyrator_ratio = gyrator_ratio
+        pass
 class ZeroJunction(BondGraphNode):
     def __init__(self):
         super().__init__(port_type=BondGraphPortTypes.ZERO_JUNCTION, max_ports=None)
