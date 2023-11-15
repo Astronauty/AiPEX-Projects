@@ -8,8 +8,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 def _read_metadata():
     with open('/Users/daniel/Documents/Python Projects/AiPEX-Projects/pyg-tutorial/data/raw/WaterDrop/metadata.json', 'rt') as fp:
-        return json.loads(fp.read())
-
+        return json.loads(fp.read()) 
 
 metadata = _read_metadata()
 ds = tf.data.TFRecordDataset(["/Users/daniel/Documents/Python Projects/AiPEX-Projects/pyg-tutorial/data/raw/WaterDrop/test.tfrecord"])
