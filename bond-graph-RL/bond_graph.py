@@ -128,7 +128,7 @@ class BondGraph():
         self.graph = nx.DiGraph()
     
     # Restrictive addition of ports (only allows valid bond graph ports)
-    def add_port(self, port:BondGraphNode):
+    def add_port(self, port_type:BondGraphPortTypes, params:dict=None):
         """
         Adds a port to the bond graph. The port is labeled according to its type and the index of the port.
 
@@ -136,7 +136,7 @@ class BondGraph():
             port (BondGraphNode): Specify the type of port to add to the bond graph. Each of the standard bond graph ports inherits the BondGraphNode class.
         """
         port_label = ""
-        match port.port_type:
+        match port_type:
             case BondGraphPortTypes.CAPACITANCE:
                 port_label = f"C_{self.i}"
             case BondGraphPortTypes.INERTANCE:
@@ -151,7 +151,8 @@ class BondGraph():
                 port_label = f"0_{self.i}"
             case BondGraphPortTypes.ONE_JUNCTION:
                 port_label = f"1_{self.i}"
-        self.graph.add_node(port_label, data=port)
+                
+        self.graph.add_node(self.i, port_type=port_type, param=params)
         self.i += 1
         return
     
