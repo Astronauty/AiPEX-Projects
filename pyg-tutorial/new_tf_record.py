@@ -17,6 +17,7 @@ print (ds) ## Dictionary Structure
 ds = ds.map(functools.partial(reading_utils.parse_serialized_simulation_example, metadata=metadata))
 print(ds)
 lds = list(ds)
+print(lds)
 
 ### Your dataset comprises of 30 simulations, each simulation contains 1001 timesteps
 ### and a variable number of particles. 

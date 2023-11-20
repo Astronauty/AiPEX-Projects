@@ -64,10 +64,7 @@ class Capacitance(BondGraphNode):
         self.e = self.q/self.C
         return self.e
     
-    def get_flow_expr(self):
-        self.f = C * 
-    
-    def 
+
 class Inertance(BondGraphNode):
     def __init__(self, inertance):
         super().__init__(port_type=BondGraphPortTypes.INERTANCE, max_ports=1)
