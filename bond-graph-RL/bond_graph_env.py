@@ -30,10 +30,15 @@ class BondGraphEnv(gym.env):
         self.edge_space = spaces.MultiDiscrete([max_nodes, max_nodes]) 
         self.edge_type_space = spaces.Discrete(2) # 2 different types of causality
         
-
-        self.action_space = spaces.Graph(self.node_type_space, self.edge_space, self.edge_type_space)
         
-        self.bg = nx.DiGraph()
+        add_node_or_edge = spaces.Discrete(2) # 0 for add node, 1 for add edge
+        node_space = spaces.Discrete(num_node_types)        
+        edge_space = spaces.MultiDiscrete([max_nodes, max_nodes, 2]) 
+
+        # (2, num_node_types, possible_edges_to_add)
+        self.action_space = spaces.Graph(add_node_or_edge, node_space, edge_space)
+        
+        self.bg = BondGraph()
         self.bg_list = {}
         
     def _action_to_bond_graph_action():
@@ -41,9 +46,16 @@ class BondGraphEnv(gym.env):
         if action < num_edge_actions:
             return 
         else:
+            return
+        pass
     
-    def _get_action_mask(self):
-        
+    def _get_action_mask(self, add_node_or_edge):
+        if add_node_or_edge == 0:
+            
+            return 
+        else:
+            return
+            
         return 
     
     def reset(self, seed=None, options=None):

@@ -169,5 +169,16 @@ class BondGraph():
         # Check if the node is valid or not
         return
     
+    def get_num_energy_storage_elements(self):
+        """
+        Returns the number of energy storage elements in the bond graph.
+        """
+        num_energy_storage_elements = 0
+        for node in self.graph.nodes:
+            if self.graph.nodes[node]['port_type'] == BondGraphPortTypes.CAPACITANCE or self.graph.nodes[node]['port_type'] == BondGraphPortTypes.INERTANCE or self.graph.nodes[node]['port_type'] == BondGraphPortTypes.RESISTANCE:
+                num_energy_storage_elements += 1
+        return num_energy_storage_elements
+    
     def get_possible_bonds():
         return
+
