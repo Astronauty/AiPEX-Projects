@@ -1,119 +1,15 @@
 import networkx as nx
+import numpy as np
 from enum import Enum
 from sympy import *
 
-class BondGraphPortTypes(Enum):
-    # Passive 1-port
-    CAPACITANCE = 0
-    INERTANCE = 1
-    RESISTANCE = 2
-    
-    # Active 1-port
-    EFFORT_SOURCE = 3
-    FLOW_SOURCE = 4
-    
-    # Multiport/junctions
-    ZERO_JUNCTION = 5
-    ONE_JUNCTION = 6
-    
-    # Two-port
-    TRANSFORMER = 7
-    GYRATOR = 8
+from bond_graph_nodes import *
+from bond_graph_edges import *
 
-class GeneralizedVariables(Enum):
-    # Power
-    EFFORT = 0
-    FLOW = 1
-    
-    # Energy
-    MOMENTUM = 2
-    DISPLACEMENT = 3
-    
-class BondGraphNode:
-    def __init__(self, port_type:BondGraphPortTypes, max_ports:int, preferred_causality:GeneralizedVariables=None):
-        self.port_type = port_type
-        self.max_ports = max_ports
-        
-        self.e, self.f, self.p, self.q = symbols('e f p q')
-            
-        pass
-    
-    def integral_causality(self):
-        match self.port_type:
-            case BondGraphPortTypes.CAPACITANCE:
-                return GeneralizedVariables.FLOW
-            case BondGraphPortTypes.INERTANCE:
-                return GeneralizedVariables.EFFORT
-            case __:
-                return None
-    
-    def get_effort_expr(self):
-        pass
-    
-    def get_flow_expr(self):
-        pass
-            
-            
-class Capacitance(BondGraphNode):
-    def __init__(self, capacitance):
-        super().__init__(port_type=BondGraphPortTypes.CAPACITANCE, max_ports=1, preferred_causality=GeneralizedVariables.FLOW)
-        self.C = capacitance
-        pass
-    
-    def get_effort_expr(self):
-        self.e = self.q/self.C
-        return self.e
-    
-
-class Inertance(BondGraphNode):
-    def __init__(self, inertance):
-        super().__init__(port_type=BondGraphPortTypes.INERTANCE, max_ports=1)
-        self.I = inertance
-        pass
-    
-class Compliance(BondGraphNode):
-    def __init__(self, compliance):
-        super().__init__(port_type=BondGraphPortTypes.COMPLIANCE, max_ports=1)
-        self.I = compliance
-        pass
-    
-
-class EffortSource(BondGraphNode):
-    def __init__(self):
-        super().__init__(port_type=BondGraphPortTypes.EFFORT_SOURCE, max_ports=1)
-        
-        pass
-class OneJunction(BondGraphNode):
-    def __init__(self):
-        super().__init__(port_type=BondGraphPortTypes.ONE_JUNCTION, max_ports=None)
-        pass
-class Transformer(BondGraphNode):
-    def __init__(self, transformer_ratio):
-        super().__init__(port_type=BondGraphPortTypes.TRANSFORMER, max_ports=2)
-        self.tf_ratio = tf_ratio
-        pass
-class Gyrator(BondGraphNode):
-    def __init__(self, gyrator_ratio):
-        super().__init__(port_type=BondGraphPortTypes.GYRATOR, max_ports=2)
-        self.gyrator_ratio = gyrator_ratio
-        pass
-class ZeroJunction(BondGraphNode):
-    def __init__(self):
-        super().__init__(port_type=BondGraphPortTypes.ZERO_JUNCTION, max_ports=None)
-        pass
-    
-
-
-
-class BondGraphEdge:
-    def __init__(self, causality):
-        self.causality = causality # Causality that the source node of the directed edge imposes on the target node ()
-        
-        pass
 
 
 class BondGraph():
-    def __init__(self, num_effort_sources:int=0, num_flow_sources:int=0):
+    def __init__(self, num_effort_sources:int=0, num_flow_sources:int=0, time=np.float):
         """
         Creates a BondGraph system with a specified number of flow and effort sources to start.
 
@@ -152,7 +48,7 @@ class BondGraph():
             case BondGraphPortTypes.ONE_JUNCTION:
                 port_label = f"1_{self.i}"
                 
-        self.graph.add_node(self.i, port_type=port_type, param=params)
+        self.graph.add_node(port_label, port_index=self.i port_type=port_type, param=params)
         self.i += 1
         return
     
