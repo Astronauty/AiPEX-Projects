@@ -9,7 +9,7 @@ from bond_graph_edges import *
 
 
 class BondGraph():
-    def __init__(self, num_effort_sources:int=0, num_flow_sources:int=0, time=np.float):
+    def __init__(self, num_effort_sources:int=0, num_flow_sources:int=0, time_array:np.ndarray=None): # TODO: Add time array
         """
         Creates a BondGraph system with a specified number of flow and effort sources to start.
 
@@ -47,8 +47,10 @@ class BondGraph():
                 port_label = f"0_{self.i}"
             case BondGraphPortTypes.ONE_JUNCTION:
                 port_label = f"1_{self.i}"
-                
-        self.graph.add_node(port_label, port_index=self.i port_type=port_type, param=params)
+            case _: # Default case
+                raise Exception("Invalid port type")
+            
+        self.graph.add_node( port_index=self.i, port_label=port_label, port_type=port_type, param=params)
         self.i += 1
         return
     
@@ -65,7 +67,7 @@ class BondGraph():
         # Check if the node is valid or not
         return
     
-    def get_num_energy_storage_elements(self):
+    def __get_num_energy_storage_elements(self):
         """
         Returns the number of energy storage elements in the bond graph.
         """
@@ -75,6 +77,21 @@ class BondGraph():
                 num_energy_storage_elements += 1
         return num_energy_storage_elements
     
+    def __get_energy_storage_elements(self):
+        """
+        Returns a list of energy storage elements in the bond graph.
+        """
+        energy_storage_elements = []
+        for node in self.graph.nodes:
+            if self.graph.nodes[node]['port_type'] == BondGraphPortTypes.CAPACITANCE or self.graph.nodes[node]['port_type'] == BondGraphPortTypes.INERTANCE or self.graph.nodes[node]['port_type'] == BondGraphPortTypes.RESISTANCE:
+                energy_storage_elements.append(node)
+        return energy_storage_elements
+    
     def get_possible_bonds():
         return
 
+    def get_state_space_matrix(self):
+        """
+        Returns the state space matrix of the bond graph.
+        """
+        return

@@ -31,8 +31,12 @@ class GeneralizedVariables(Enum):
     MOMENTUM = 2
     DISPLACEMENT = 3
     
+class CausalityTypes(Enum):
+    INTEGRAL = 0
+    DERIVATIVE = 1
+    
 class BondGraphNode:
-    def __init__(self, port_type:BondGraphPortTypes, max_ports:int, preferred_causality:GeneralizedVariables=None):
+    def __init__(self, port_type:BondGraphPortTypes, max_ports:int, causality:GeneralizedVariables=None):
         self.port_type = port_type
         self.max_ports = max_ports
         
@@ -51,8 +55,8 @@ class BondGraphNode:
             
 # Passive 1-Ports
 class Capacitance(BondGraphNode):
-    def __init__(self, capacitance):
-        super().__init__(port_type=BondGraphPortTypes.CAPACITANCE, max_ports=1, preferred_causality=GeneralizedVariables.FLOW)
+    def __init__(self, capacitance, causality:CausalityTypes):
+        super().__init__(port_type=BondGraphPortTypes.CAPACITANCE, max_ports=1, causality=causality)
         self.C = capacitance
         pass
     
@@ -67,8 +71,8 @@ class Capacitance(BondGraphNode):
         return self.q
 
 class Inertance(BondGraphNode):
-    def __init__(self, inertance):
-        super().__init__(port_type=BondGraphPortTypes.INERTANCE, max_ports=1)
+    def __init__(self, inertance, causality:CausalityTypes):
+        super().__init__(port_type=BondGraphPortTypes.INERTANCE, max_ports=1, causality=causality)
         self.I = inertance
         pass
     
@@ -98,7 +102,7 @@ class Resistance(BondGraphNode):
     
 # Active 1-Ports
 class EffortSource(BondGraphNode):
-    def __init__(self, effort_src):
+    def __init__(self, effort_src:np.ndarray): 
         """Specifies an effort source in the bond graph.
 
         Args:
@@ -122,6 +126,14 @@ class OneJunction(BondGraphNode):
     def __init__(self):
         super().__init__(port_type=BondGraphPortTypes.ONE_JUNCTION, max_ports=None)
         pass
+    
+    def get_flow_expr(self):
+        # some flag saying that you should get the source of flow causality from the edges attached to this node
+        return 
+    
+    def get_effort_expr(self):
+        # some flag saying that you should get the sum of efforts into the node
+        return
     
 class ZeroJunction(BondGraphNode):
     def __init__(self):
