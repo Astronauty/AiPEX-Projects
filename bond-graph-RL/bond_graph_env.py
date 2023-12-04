@@ -9,7 +9,7 @@ import random
 
 class BondGraphEnv(gym.env):
     def __init__(self, max_bond_graphs, max_nodes):
-        num_node_types = len(BondGraphPortTypes)
+        num_node_types = len(BondGraphElementTypes)
         
         num_edge_actions = math.permute(max_nodes, 2)*2 # Multiply by 2 for bond causality
         num_node_actions = num_node_types**max_nodes # Max number of nodes allowed in bg times number of node types

@@ -65,11 +65,11 @@ class BondGraph():
             case _: # Default case
                 raise ValueError("Invalid element type")
 
-        self.graph.add_node(node_index, element_label=element_label, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=causality, params=params, node=node) # TODO: entire node class is stored in networkx attributes, but this is redundant
+        self.graph.add_node(node_index, element_label=element_label, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=cftausality, params=params, node=node) # TODO: entire node class is stored in networkx attributes, but this is redundant
         self.i += 1
         return
     
-    def add_bond(self, u, v, imposed_causality:GeneralizedVariables):
+    def add_bond(self, u, v, power_sign:int=1):
         """
         Creates a bond graph bond between nodes u and v. The directed edge corresponds to energy sign (i.e. power flows from the source node to the target node).
         Args:
