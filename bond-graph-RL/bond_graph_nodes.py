@@ -6,6 +6,8 @@ from sympy import *
 
 # enums for tracking standard bond graph variable and node types
 class BondGraphElementTypes(Enum):
+    NONE = -1
+    
     # Passive 1-ports
     CAPACITANCE = 0
     INERTANCE = 1

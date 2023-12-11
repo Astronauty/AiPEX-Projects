@@ -7,7 +7,7 @@ from bond_graph import *
 from itertools import permutations
 import random
 
-class BondGraphEnv(gym.env):
+class BondGraphEnv(gym.Env):
     def __init__(self, max_bond_graphs, max_nodes):
         num_node_types = len(BondGraphElementTypes)
         
@@ -26,9 +26,9 @@ class BondGraphEnv(gym.env):
         self.bond_graph_space = spaces.Discrete(max_bond_graphs)
         self.bond_graph_list = []
     
-        self.node_type_space = spaces.Discrete(num_node_types)
-        self.edge_space = spaces.MultiDiscrete([max_nodes, max_nodes]) 
-        self.edge_type_space = spaces.Discrete(2) # 2 different types of causality
+        # self.node_type_space = spaces.Discrete(num_node_types)
+        # self.edge_space = spaces.MultiDiscrete([max_nodes, max_nodes]) 
+        # self.edge_type_space = spaces.Discrete(2) # 2 different types of causality
         
         
         add_node_or_edge = spaces.Discrete(2) # 0 for add node, 1 for add edge
