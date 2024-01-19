@@ -108,7 +108,7 @@ class Capacitance(BondGraphNode):
 class Inertance(BondGraphNode):
     def __init__(self, inertance, causality:CausalityTypes=CausalityTypes.INTEGRAL):
         params = {'I': inertance}
-        super().__init__(element_type=BondGraphElementTypes.INERTANCE, max_ports=1, causality=causality)
+        super().__init__(element_type=BondGraphElementTypes.INERTANCE, max_ports=1, causality=causality, params=params)
         self.I = inertance
         pass
     
