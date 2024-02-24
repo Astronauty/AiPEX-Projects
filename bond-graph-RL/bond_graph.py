@@ -311,7 +311,7 @@ class BondGraph():
                     return node['e']/node['params']['R']
                     
                 case BondGraphElementTypes.EFFORT_SOURCE:
-                    raise ValueError("Effort source queried for flow - incorrect causality assignment present.")
+                    pass
                 
                 case BondGraphElementTypes.FLOW_SOURCE:
                     return node['Sf']
@@ -320,7 +320,7 @@ class BondGraph():
                     # Since directivity governs flow causality, the successor nodes are the ones that impose flow causality on the given node
                     successors = list(self.flow_causal_graph.successors(node_index))
                     flow_summation_terms = [self.get_flow_expr(successor)*self.flow_causal_graph.edges[node_index, successor]['power_sign'] for successor in successors]
-                    return sum(flow_summation_terms)
+                    return sum(flow_summation_terms) 
                 
                 case BondGraphElementTypes.ONE_JUNCTION:
                     pass

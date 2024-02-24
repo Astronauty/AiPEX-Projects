@@ -3,6 +3,9 @@ import numpy as np
 from enum import Enum
 import sympy
 from sympy import *
+import json
+import functools
+
 
 # enums for tracking standard bond graph variable and node types
 class BondGraphElementTypes(Enum):
@@ -24,7 +27,15 @@ class BondGraphElementTypes(Enum):
     # Two-ports
     TRANSFORMER = 7
     GYRATOR = 8
-
+    
+class BondGraphElementTypesEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, BondGraphElementTypes):
+            return str(obj)
+        return super().default(obj)
+json.dumps = functools.partial(json.dumps, cls=BondGraphElementTypesEncoder)
+    
+    
 # def is_1port(port_type:BondGraphElementTypes):
 #     return port_type == BondGraphElementTypes.CAPACITANCE \
 #         or port_type == BondGraphElementTypes.INERTANCE \
@@ -136,7 +147,7 @@ class Resistance(BondGraphNode):
     
     def get_state_var(self):
         return None
-    
+
 # Active 1-Ports
 class EffortSource(BondGraphNode):
     def __init__(self, effort_src:np.ndarray): 
