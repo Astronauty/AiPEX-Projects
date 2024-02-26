@@ -45,22 +45,27 @@ class BondGraph():
         if element_addition_mask[element_type.value] == 0:   
             raise ValueError(f"element type {element_type} is masked and cannot be added to the bond graph.")
 
-        self.flow_causal_graph.add_node(node_index, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=causality, params=params, node=node) # TODO: entire node class is stored in networkx attributes, but this is redundant
+        self.flow_causal_graph.add_node(node_index, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=causality, params=params) # TODO: entire node class is stored in networkx attributes, but this is redundant
         # Generate element labels in format {element_type}_{index}
         match element_type:
             case BondGraphElementTypes.CAPACITANCE:
                 q = symbols(f"q_{self.i}")
+                q_dot = symbols(f"q_dot_{self.i}")
                 self.flow_causal_graph.nodes[node_index]['q'] = q
+                self.flow_causal_graph.nodes[node_index]['q_dot'] = q_dot
                 
                 element_label = f"C_{self.i}"
                 
             case BondGraphElementTypes.INERTANCE:
                 p = symbols(f"p_{self.i}")
+                p_dot = symbols(f"q_dot_{self.i}")
                 self.flow_causal_graph.nodes[node_index]['p'] = p
+                self.flow_causal_graph.nodes[node_index]['p_dot'] = q_dot
                 
                 element_label = f"I_{self.i}"
             case BondGraphElementTypes.RESISTANCE:
                 element_label = f"R_{self.i}"
+                
                 
             case BondGraphElementTypes.EFFORT_SOURCE:
                 Se = symbols(f"Se_{self.i}")
@@ -116,8 +121,9 @@ class BondGraph():
         elif power_sign == -1:
             if power_adjancency_mask[v, u] == 0:
                 raise ValueError("Bond addition is masked due to power adjacency.")
-            
-        self.flow_causal_graph.add_edge(u, v, power_sign=power_sign)
+        
+        e, f = symbols(f"e_{u},{v}", f"f_{u},{v}")
+        self.flow_causal_graph.add_edge(u, v, power_sign=power_sign, e=e, f=f)
             
         pass
     
@@ -336,11 +342,70 @@ class BondGraph():
             
             return 
             # Terminal condition for recursion: is a state node or a source node
+            
+    def derive_constitutive_laws(self, node):
 
-    
-    def get_causal_root_nodes():
-        # return root sources or states that impose causality on a given node
-        return NotImplemented
+        flow_successors = list(self.flow_causal_graph.succesors(node))
+        num_flow_successors = len(flow_successors)
+        
+        effort_successors = list(self.effort_causal_graph.successors(node))
+        num_effort_successors = len(effort_successors)
+        
+        edges = list(self.flow_causal_graph.edges(node))
+        num_edges = len(edges)
+        
+        expr = []
+        
+        match node['element_type']:
+            case BondGraphElementTypes.CAPACITANCE:
+                assert num_flow_successors == 1
+                assert num_edges == 1
+                
+                # Integral causality law: e = q/C
+                expr.append(Eq(self.edge_casual_graph[edges[0]], node['q']/node['params']['C']))
+                
+                # Co-energy equality: set the derivative of the displacement equal to the flow attribute of the connecting bond
+                expr.append(Eq(node['q_dot'], self.flow_causal_graph[flow_successors[0]]['f']))
+                
+                print(G.effort_causal_graph.edges[edges[0]])
+                return 
+                
+            # case BondGraphElementTypes.INERTANCE:
+            #     assert num_flow_successors == 1
+            #     return node['p']/node['params']['I']
+            
+            # case BondGraphElementTypes.RESISTANCE:
+            #     predecessors = list(self.flow_causal_graph.predecessors(node_index))
+                
+            #     # if len(predecessors) == 1:
+            #     #     raise ValueError("Resistance element has more than one bond.")
+                
+            #     return node['e']/node['params']['R']
+                
+            # case BondGraphElementTypes.EFFORT_SOURCE:
+            #     pass
+            
+            # case BondGraphElementTypes.FLOW_SOURCE:
+            #     return node['Sf']
+            
+            # case BondGraphElementTypes.ZERO_JUNCTION:  
+            #     # Since directivity governs flow causality, the successor nodes are the ones that impose flow causality on the given node
+            #     successors = list(self.flow_causal_graph.successors(node_index))
+            #     flow_summation_terms = [self.get_flow_expr(successor)*self.flow_causal_graph.edges[node_index, successor]['power_sign'] for successor in successors]
+            #     return sum(flow_summation_terms) 
+            
+            # case BondGraphElementTypes.ONE_JUNCTION:
+            #     pass
+            
+            # case BondGraphElementTypes.TRANSFORMER:
+            #     pass
+            
+            # case BondGraphElementTypes.GYRATOR:
+            #     pass
+            
+            case _:
+                return
+     
     
     def get_state_space_matrix(self):
         """
@@ -349,4 +414,13 @@ class BondGraph():
         # for each state variable
             # get expression for each state variable
             # construct the state space matrix
+        state_vars = self.get_energy_storage_elements()
+        
+        sys_eq = []
+        
+        for n in self.flow_causal_graph():
+            
+        
+
+        
         return NotImplemented
