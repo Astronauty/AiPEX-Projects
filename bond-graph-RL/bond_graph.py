@@ -60,7 +60,7 @@ class BondGraph():
                 p = symbols(f"p_{self.i}")
                 p_dot = symbols(f"q_dot_{self.i}")
                 self.flow_causal_graph.nodes[node_index]['p'] = p
-                self.flow_causal_graph.nodes[node_index]['p_dot'] = q_dot
+                self.flow_causal_graph.nodes[node_index]['p_dot'] = p_dot
                 
                 element_label = f"I_{self.i}"
             case BondGraphElementTypes.RESISTANCE:
@@ -122,7 +122,8 @@ class BondGraph():
             if power_adjancency_mask[v, u] == 0:
                 raise ValueError("Bond addition is masked due to power adjacency.")
         
-        e, f = symbols(f"e_{u},{v}", f"f_{u},{v}")
+        e = Symbol(f"e_{u}:{v}")
+        f = Symbol(f"f_{u}:{v}")
         self.flow_causal_graph.add_edge(u, v, power_sign=power_sign, e=e, f=f)
             
         pass
@@ -329,6 +330,7 @@ class BondGraph():
                     return sum(flow_summation_terms) 
                 
                 case BondGraphElementTypes.ONE_JUNCTION:
+                    
                     pass
                 
                 case BondGraphElementTypes.TRANSFORMER:
@@ -343,60 +345,102 @@ class BondGraph():
             return 
             # Terminal condition for recursion: is a state node or a source node
             
-    def derive_constitutive_laws(self, node):
-
-        flow_successors = list(self.flow_causal_graph.succesors(node))
-        num_flow_successors = len(flow_successors)
+    def derive_constitutive_laws(self, node_index:int):
+        EDGE_ATTRIBUTE_DICTIONARY_INDEX = 2
+    
+        node = self.flow_causal_graph.nodes[node_index]
         
-        effort_successors = list(self.effort_causal_graph.successors(node))
+        flow_in_bonds = list(self.flow_causal_graph.predecessors(node_index))
+        num_flow_predecessors = len(flow_in_bonds)
+        
+        flow_out_bonds = list(self.flow_causal_graph.successors(node_index))
+        num_flow_successors = len(flow_out_bonds)
+        
+        effort_predecessors = list(self.effort_causal_graph.predecessors(node_index))
+        num_effort_predecessors = len(effort_predecessors)
+        
+        effort_successors = list(self.effort_causal_graph.successors(node_index))
         num_effort_successors = len(effort_successors)
         
-        edges = list(self.flow_causal_graph.edges(node))
-        num_edges = len(edges)
+        
         
         expr = []
         
         match node['element_type']:
             case BondGraphElementTypes.CAPACITANCE:
-                assert num_flow_successors == 1
-                assert num_edges == 1
+                assert num_flow_predecessors == 1
                 
-                # Integral causality law: e = q/C
-                expr.append(Eq(self.edge_casual_graph[edges[0]], node['q']/node['params']['C']))
+                attached_bond = list(self.flow_causal_graph.in_edges(node_index, data=True))[0]
+                
+                # Contitutive law (integral causality): e = q/C
+                expr.append(Eq(attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e'] , node['q']/node['params']['C']))
                 
                 # Co-energy equality: set the derivative of the displacement equal to the flow attribute of the connecting bond
-                expr.append(Eq(node['q_dot'], self.flow_causal_graph[flow_successors[0]]['f']))
+                expr.append(Eq(node['q_dot'], attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']))
+
+            case BondGraphElementTypes.INERTANCE:
+                assert num_effort_predecessors == 1
+                attached_bond = list(self.effort_causal_graph.in_edges(node_index, data=True))[0]
                 
-                print(G.effort_causal_graph.edges[edges[0]])
-                return 
+                # Constitutive law (integral causality): f = p/I
+                expr.append(Eq(attached_bond[2]['f'] , node['p']/node['params']['I']))
                 
-            # case BondGraphElementTypes.INERTANCE:
-            #     assert num_flow_successors == 1
-            #     return node['p']/node['params']['I']
+                # Co-energy equality: set the derivative of the momentum equal to the effort attribute of the connecting bond
+                expr.append(Eq(node['p_dot'], attached_bond[2]['e']))
             
-            # case BondGraphElementTypes.RESISTANCE:
-            #     predecessors = list(self.flow_causal_graph.predecessors(node_index))
+            case BondGraphElementTypes.RESISTANCE:
+                assert num_effort_predecessors==1 or num_flow_predecessors==1
+                assert num_effort_predecessors != num_flow_predecessors
                 
-            #     # if len(predecessors) == 1:
-            #     #     raise ValueError("Resistance element has more than one bond.")
+                # Contitutive law (flow causality): e = f*R
+                if num_flow_predecessors == 1:
+                    attached_bond = list(self.flow_causal_graph.in_edges(node_index, data=True))[0]
+                    expr.append(Eq(attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e'] , attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*node['params']['R']))
                 
-            #     return node['e']/node['params']['R']
+                # Contitutive law (flow causality): f = e/R
+                elif num_effort_predecessors == 1:
+                    attached_bond = list(self.effort_causal_graph.in_edges(node_index, data=True))[0]
+                    expr.append(Eq(attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f'] , attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']/node['params']['R']))
                 
-            # case BondGraphElementTypes.EFFORT_SOURCE:
-            #     pass
+            case BondGraphElementTypes.EFFORT_SOURCE:
+                assert num_effort_successors == 1
+                attached_bond = list(self.effort_causal_graph.out_edges(node_index, data=True))[0]
+                expr.append(Eq(node['Se'], attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']))
             
-            # case BondGraphElementTypes.FLOW_SOURCE:
-            #     return node['Sf']
+            case BondGraphElementTypes.FLOW_SOURCE:
+                assert num_flow_successors == 1
+                attached_bond = list(self.flow_causal_graph.out_edges(node_index, data=True))[0]
+                expr.append(Eq(node['Sf'], attached_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']))
             
-            # case BondGraphElementTypes.ZERO_JUNCTION:  
-            #     # Since directivity governs flow causality, the successor nodes are the ones that impose flow causality on the given node
-            #     successors = list(self.flow_causal_graph.successors(node_index))
-            #     flow_summation_terms = [self.get_flow_expr(successor)*self.flow_causal_graph.edges[node_index, successor]['power_sign'] for successor in successors]
-            #     return sum(flow_summation_terms) 
+            case BondGraphElementTypes.ZERO_JUNCTION:  
+                effort_in_bonds = list(self.effort_causal_graph.in_edges(node_index, data=True))
+                assert len(effort_in_bonds) == 1 # Make sure there is only one flow causality source
+                
+                effort_out_bonds = list(self.effort_causal_graph.out_edges(node_index, data=True)) 
+
+                # Power conservation via sum of flows equaling zero
+                expr.append(-Eq(effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
+                    sum(effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for effort_out_bond in flow_out_bonds)))
+                
+                # All efforts equal each other
+                for effort_out_bond in effort_out_bonds:
+                    expr.append(Eq(effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e'], effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']))
             
-            # case BondGraphElementTypes.ONE_JUNCTION:
-            #     pass
-            
+            case BondGraphElementTypes.ONE_JUNCTION:
+                
+                flow_in_bonds = list(self.flow_causal_graph.in_edges(node_index, data=True))
+                assert len(flow_in_bonds) == 1 # Make sure there is only one flow causality source
+                
+                flow_out_bonds = list(self.flow_causal_graph.out_edges(node_index, data=True)) 
+
+                # Power conservation via sum of efforts equaling zero
+                expr.append(Eq(flow_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']*flow_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
+                    sum(-flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']*flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for flow_out_bond in flow_out_bonds)))
+                
+                # All flows equal each other
+                for flow_out_bond in flow_out_bonds:
+                    expr.append(Eq(flow_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f'], flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']))
+
             # case BondGraphElementTypes.TRANSFORMER:
             #     pass
             
@@ -405,22 +449,20 @@ class BondGraph():
             
             case _:
                 return
-     
+        return expr
     
     def get_state_space_matrix(self):
         """
-        Returns the state space matrix of the bond graph.
+        Returns the state space matrices A, B of the bond graph where x_dot = Ax + Bu
         """
         # for each state variable
             # get expression for each state variable
             # construct the state space matrix
         state_vars = self.get_energy_storage_elements()
+        # sys_eq = []
         
-        sys_eq = []
-        
-        for n in self.flow_causal_graph():
+        # for n in self.flow_causal_graph():
+        return NotImplementedError
             
         
 
-        
-        return NotImplemented
