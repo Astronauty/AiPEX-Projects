@@ -1,10 +1,12 @@
+from enum import Enum
+
 import networkx as nx
 import numpy as np
-from enum import Enum
 from sympy import *
 
-from bond_graph_nodes import *
 from bond_graph_edges import *
+from bond_graph_nodes import *
+
 
 class BondGraph():
     def __init__(self, max_nodes, num_states, num_effort_sources:int=0, num_flow_sources:int=0, time_array:np.ndarray=None): # TODO: Add time array
@@ -37,8 +39,8 @@ class BondGraph():
         element_type = node.element_type
         max_ports = node.max_ports
         causality = node.causality
-        params = node.params
         node_index = self.i
+        params = node.params
 
         element_addition_mask = self.get_element_addition_mask()
         
@@ -63,6 +65,7 @@ class BondGraph():
                 self.flow_causal_graph.nodes[node_index]['p_dot'] = p_dot
                 
                 element_label = f"I_{self.i}"
+                
             case BondGraphElementTypes.RESISTANCE:
                 element_label = f"R_{self.i}"
                 
@@ -345,7 +348,7 @@ class BondGraph():
             return 
             # Terminal condition for recursion: is a state node or a source node
             
-    def derive_constitutive_laws(self, node_index:int):
+    def constitutive_laws(self, node_index:int):
         EDGE_ATTRIBUTE_DICTIONARY_INDEX = 2
     
         node = self.flow_causal_graph.nodes[node_index]
@@ -451,18 +454,47 @@ class BondGraph():
                 return
         return expr
     
+
     def get_state_space_matrix(self):
         """
         Returns the state space matrices A, B of the bond graph where x_dot = Ax + Bu
         """
-        # for each state variable
-            # get expression for each state variable
-            # construct the state space matrix
-        state_vars = self.get_energy_storage_elements()
-        # sys_eq = []
+        state_derivative_vars = []
+        state_vars = []
+        bond_vars = []
         
-        # for n in self.flow_causal_graph():
-        return NotImplementedError
+        
+        system_equations = []
+        for node in self.flow_causal_graph.nodes:
+            system_equations += self.constitutive_laws(node)
+        
+        energy_storage_nodes = self.get_energy_storage_elements()
+
+        for energy_storage_node in energy_storage_nodes:
+            match self.flow_causal_graph.nodes[energy_storage_node]['element_type']:
+                case BondGraphElementTypes.CAPACITANCE:
+                    state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q'])
+                    state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q_dot'])
+                
+                case BondGraphElementTypes.INERTANCE:
+                    state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p'])
+                    state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p_dot'])
+                    
+        for bond in self.flow_causal_graph.edges:
+            bond_vars.append(self.flow_causal_graph.edges[bond]['e'])
+            bond_vars.append(self.flow_causal_graph.edges[bond]['f'])
+        
+        print("state derivatives: ", state_derivative_vars)
+        print("states: ", state_vars)
+        print("bonds: ", bond_vars)
+        
+        A, b = linear_eq_to_matrix(system_equations, *state_derivative_vars, *bond_vars)
+
+        print(list(zip(state_vars, [1] * len(state_vars))))
+        b = b.subs(zip(state_vars, [1] * len(state_vars)))
+
+
+        return A, b
             
         
 

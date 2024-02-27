@@ -79,6 +79,8 @@ class CausalityTypes(Enum): # TODO: do we need this if DiGraph uses directivity 
     
     
 class BondGraphNode:
+    """_summary_
+    """
     def __init__(self, element_type:BondGraphElementTypes, max_ports:int, causality:GeneralizedVariables=None, params:Dict={}):
         self.element_type = element_type
         self.max_ports = max_ports
