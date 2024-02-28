@@ -3,6 +3,7 @@ from enum import Enum
 import networkx as nx
 import numpy as np
 from sympy import *
+import copy
 
 from bond_graph_edges import *
 from bond_graph_nodes import *
@@ -60,7 +61,7 @@ class BondGraph():
                 
             case BondGraphElementTypes.INERTANCE:
                 p = symbols(f"p_{self.i}")
-                p_dot = symbols(f"q_dot_{self.i}")
+                p_dot = symbols(f"p_dot_{self.i}")
                 self.flow_causal_graph.nodes[node_index]['p'] = p
                 self.flow_causal_graph.nodes[node_index]['p_dot'] = p_dot
                 
@@ -147,18 +148,16 @@ class BondGraph():
             
         return allowable_element_types
     
+    def get_source_elements(self):
+        """
+        Returns a list of energy storage elements in the bond graph.
+        """  
+        source_elements = [x for x, y in self.flow_causal_graph.nodes(data=True) if is_source_element(y['element_type'])]
+        return source_elements
     def get_energy_storage_elements(self):
         """
         Returns a list of energy storage elements in the bond graph.
         """
-        energy_storage_elements = []
-        # for node in self.graph.nodes:
-        #     if self.graph.nodes[node]['element_type'] == BondGraphElementTypes.CAPACITANCE or self.graph.nodes[node]['element_type'] == BondGraphElementTypes.INERTANCE or self.graph.nodes[node]['element_type'] == BondGraphElementTypes.RESISTANCE:
-        #         energy_storage_elements.append(node)
-        
-        for node in self.flow_causal_graph.nodes:
-            if is_energy_storage_element(self.flow_causal_graph.nodes[node]['element_type']):
-                energy_storage_elements.append(node)
         
         energy_storage_elements = [x for x, y in self.flow_causal_graph.nodes(data=True) if is_energy_storage_element(y['element_type'])]
         return energy_storage_elements
@@ -168,25 +167,8 @@ class BondGraph():
         Returns a list of elements with n ports in the bond graph.
         """
         n_port_elements = [x for x, y in self.flow_causal_graph.nodes(data=True) if y['max_ports'] == n]
-        # for node in self.graph.nodes:
-        #     if is_1port(self.graph.nodes[node]['port_type']):
-        #         one_ports.append(node)
+
         return n_port_elements
-    
-    # def derive_state_space_equations(self):
-    #     state_nodes = self.get_energy_storage_elements()
-    #     state_expressions = []
-        
-    #     for state_node in state_nodes:
-    #         if state_node['causality'] == CausalityTypes.INTEGRAL:
-    #             if state_node['element_type'] == BondGraphElementTypes.CAPACITANCE:
-    #                 state_node['node'].get_flow_expr() = q_dot/C
-                    
-    #             elif state_node['element_type'] == BondGraphElementTypes.INERTANCE:
-    #                 state_node['node'].get_effort_expr()
-    #         else:
-    #             raise ValueError("Non-integral causalities are not supported yet!") # TODO: deal with derivative causality
-    #     pass
     
 
     # def is_permitted_bond(self, u, v, power_sign):
@@ -254,100 +236,7 @@ class BondGraph():
                         
         return causal_adjacency_mask, power_flow_adjacency_mask
         
-    
-    def get_flow_expr(self, node_index:int, prev_node_index:int = None):
-        """
-        Return the flow expression of a given node
-        """
-        node = self.flow_causal_graph.nodes[node_index]
-        
-        match node['element_type']:
-            case BondGraphElementTypes.CAPACITANCE:
-                return Derivative(node['q']) # INTEGRAL CAUSLAITY
-                
-            case BondGraphElementTypes.INERTANCE:
-                return node['p']/node['params']['I']
-            
-            case BondGraphElementTypes.RESISTANCE:
-                predecessors = list(self.flow_causal_graph.predecessors(node_index))
-                
-                # if len(predecessors) == 1:
-                #     raise ValueError("Resistance element has more than one bond.")
-                
-                return node['e']/node['params']['R']
-                
-            case BondGraphElementTypes.EFFORT_SOURCE:
-                raise ValueError("Effort source queried for flow - incorrect causality assignment present.")
-            
-            case BondGraphElementTypes.FLOW_SOURCE:
-                return node['Sf']
-            
-            case BondGraphElementTypes.ZERO_JUNCTION: 
-                # Since directivity governs flow causality, the successor nodes are the ones that impose flow causality on the given node
-                successors = list(self.flow_causal_graph.successors(node_index))
-                
-                flow_summation_terms = [self.get_flow_expr(successor, prev_node_index=node_index)*self.flow_causal_graph.edges[node_index, successor]['power_sign'] for successor in successors]
-                sum(flow_summation_terms)
-                return 
-            
-            case BondGraphElementTypes.ONE_JUNCTION:
-                return
-            
-            case BondGraphElementTypes.TRANSFORMER:
-                return
-            
-            case BondGraphElementTypes.GYRATOR:
-                pass
-            
-            case _:
-                return
-            
-    def get_effort_expr(self, node_index:int, prev_node_index:int = None):
-            node = self.flow_causal_graph.nodes[node_index]
-        
-            match node['element_type']:
-                case BondGraphElementTypes.CAPACITANCE:
-                    return Derivative(node['q']) # INTEGRAL CAUSLAITY
-                    
-                case BondGraphElementTypes.INERTANCE:
-                    return node['p']/node['params']['I']
-                
-                case BondGraphElementTypes.RESISTANCE:
-                    predecessors = list(self.flow_causal_graph.predecessors(node_index))
-                    
-                    # if len(predecessors) == 1:
-                    #     raise ValueError("Resistance element has more than one bond.")
-                    
-                    return node['e']/node['params']['R']
-                    
-                case BondGraphElementTypes.EFFORT_SOURCE:
-                    pass
-                
-                case BondGraphElementTypes.FLOW_SOURCE:
-                    return node['Sf']
-                
-                case BondGraphElementTypes.ZERO_JUNCTION:  
-                    # Since directivity governs flow causality, the successor nodes are the ones that impose flow causality on the given node
-                    successors = list(self.flow_causal_graph.successors(node_index))
-                    flow_summation_terms = [self.get_flow_expr(successor)*self.flow_causal_graph.edges[node_index, successor]['power_sign'] for successor in successors]
-                    return sum(flow_summation_terms) 
-                
-                case BondGraphElementTypes.ONE_JUNCTION:
-                    
-                    pass
-                
-                case BondGraphElementTypes.TRANSFORMER:
-                    pass
-                
-                case BondGraphElementTypes.GYRATOR:
-                    pass
-                
-                case _:
-                    return
-            
-            return 
-            # Terminal condition for recursion: is a state node or a source node
-            
+
     def constitutive_laws(self, node_index:int):
         EDGE_ATTRIBUTE_DICTIONARY_INDEX = 2
     
@@ -422,7 +311,7 @@ class BondGraph():
                 effort_out_bonds = list(self.effort_causal_graph.out_edges(node_index, data=True)) 
 
                 # Power conservation via sum of flows equaling zero
-                expr.append(-Eq(effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
+                expr.append(Eq(effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
                     sum(effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for effort_out_bond in flow_out_bonds)))
                 
                 # All efforts equal each other
@@ -438,7 +327,7 @@ class BondGraph():
 
                 # Power conservation via sum of efforts equaling zero
                 expr.append(Eq(flow_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']*flow_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
-                    sum(-flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']*flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for flow_out_bond in flow_out_bonds)))
+                    sum(flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['e']*flow_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for flow_out_bond in flow_out_bonds)))
                 
                 # All flows equal each other
                 for flow_out_bond in flow_out_bonds:
@@ -455,13 +344,14 @@ class BondGraph():
         return expr
     
 
-    def get_state_space_matrix(self):
+    def update_state_space_matrix(self, verbose:bool=false):
         """
         Returns the state space matrices A, B of the bond graph where x_dot = Ax + Bu
         """
-        state_derivative_vars = []
-        state_vars = []
-        bond_vars = []
+        self.state_derivative_vars = []
+        self.control_vars = []
+        self.state_vars = []
+        self.bond_vars = []
         
         
         system_equations = []
@@ -473,28 +363,63 @@ class BondGraph():
         for energy_storage_node in energy_storage_nodes:
             match self.flow_causal_graph.nodes[energy_storage_node]['element_type']:
                 case BondGraphElementTypes.CAPACITANCE:
-                    state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q'])
-                    state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q_dot'])
+                    self.state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q'])
+                    self.state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['q_dot'])
                 
                 case BondGraphElementTypes.INERTANCE:
-                    state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p'])
-                    state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p_dot'])
+                    self.state_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p'])
+                    self.state_derivative_vars.append(self.flow_causal_graph.nodes[energy_storage_node]['p_dot'])
+        
+        source_nodes = self.get_source_elements()
+
+        for source_node in source_nodes:
+            match self.flow_causal_graph.nodes[source_node]['element_type']:
+                case BondGraphElementTypes.FLOW_SOURCE:
+                    self.control_vars.append(self.flow_causal_graph.nodes[source_node]['Sf'])
                     
+                case BondGraphElementTypes.EFFORT_SOURCE:
+                    self.control_vars.append(self.flow_causal_graph.nodes[source_node]['Se'])
+        
         for bond in self.flow_causal_graph.edges:
-            bond_vars.append(self.flow_causal_graph.edges[bond]['e'])
-            bond_vars.append(self.flow_causal_graph.edges[bond]['f'])
+            self.bond_vars.append(self.flow_causal_graph.edges[bond]['e'])
+            self.bond_vars.append(self.flow_causal_graph.edges[bond]['f'])
+
         
-        print("state derivatives: ", state_derivative_vars)
-        print("states: ", state_vars)
-        print("bonds: ", bond_vars)
-        
-        A, b = linear_eq_to_matrix(system_equations, *state_derivative_vars, *bond_vars)
-
-        print(list(zip(state_vars, [1] * len(state_vars))))
-        b = b.subs(zip(state_vars, [1] * len(state_vars)))
-
-
-        return A, b
+        self.A, self.b = linear_eq_to_matrix(system_equations, *self.state_derivative_vars, *self.bond_vars)
             
+        # print("bond graph states: ", self.state_derivative_vars, self.bond_vars)
+        if verbose:
+            print("Bond Graph Variables: ")
+            print("=====================")
+            print("State Derivatives: ", self.state_derivative_vars)
+            print("States: ", self.state_vars)
+            print("Bonds: ", self.bond_vars)
+            print()
+            print("Constitutive Laws: ")
+            print("==================")
+            print()
+            print("Matrix Formulation (Ax = b): ")
+            print("============================")
+            print(f"A {self.A.shape}: {self.A}")
+            print(f"b: {self.b.shape}: {self.b}")
+            print(f"x ({len(self.state_derivative_vars) + len(self.bond_vars)}): {self.state_derivative_vars} {self.bond_vars}")
+            
+        pass
+    
+    def dynamics(self, x, t, u):
+        assert len(self.state_vars) == len(x)
+        assert len(self.state_derivative_vars) == len(self.state_vars)
+        assert len(self.control_vars) == len(u(t))
+        
+        b = copy.deepcopy(self.b) # Make a copy of b so we don't ovewrite the original sympy variables at each timestep
+        
+        b = b.subs(zip(self.state_vars, x[0:len(self.state_vars)])) # Substitute in state variables at the current time step
+        b = b.subs(zip(self.control_vars, u(t))) # Substitute in the current control actions
+        
+        
+        x = np.linalg.solve(np.array(self.A).astype('float'), np.array(b).astype('float'))
+        x = x.flatten()
+        
+        return x[0:len(self.state_derivative_vars)]
         
 
