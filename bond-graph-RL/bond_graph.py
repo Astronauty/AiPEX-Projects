@@ -397,6 +397,7 @@ class BondGraph():
             print()
             print("Constitutive Laws: ")
             print("==================")
+            print(system_equations)
             print()
             print("Matrix Formulation (Ax = b): ")
             print("============================")
