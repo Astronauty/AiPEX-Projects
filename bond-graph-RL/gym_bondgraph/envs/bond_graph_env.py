@@ -10,7 +10,9 @@ import random
 import copy
 from gymnasium.envs.registration import register
 
-
+VALID_SOLUTION_REWARD_SCALING = 10
+INVALID_SOLUTION_REWARD = -1
+MASKED_ACTION_PENALTY = -100
 
 class BondGraphEnv(gym.Env):
     def __init__(self, seed, seed_graph, max_nodes, default_params):
@@ -38,14 +40,15 @@ class BondGraphEnv(gym.Env):
 
         self.action_space = spaces.Dict(
             {
-                "add_node_space": add_node_space,
-                "add_edge_space": add_edge_space,
+                'node_or_bond': spaces.Discrete(2, start=0, seed=seed),
+                "node_type": add_node_space,
+                "bond": add_edge_space,
             }
         )
         
         # Observation space definition
         adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int32) # represents the flow-causal adacency matrix
-        node_feature_space = spaces.MultiDiscrete([max_nodes, num_node_types], seed=seed) # look at up to the number of max_nodes
+        node_feature_space = spaces.MultiDiscrete([num_node_types]*max_nodes, seed=seed) # look at up to the number of max_nodes
         
         self.observation_space = spaces.Dict(
             {
@@ -68,42 +71,72 @@ class BondGraphEnv(gym.Env):
         info = self._get_info()
         return observation, info
 
-    def step(self, action):
+    def step(self, action):  
         
-        element_addition_mask = self.bond_graph.get_element_addition_mask()
-        
-        match action:
-            case BondGraphElementTypes.CAPACITANCE:
-                self.bond_graph.add_element(Capacitance(capacitance = self.default_params['C']))
-                
-            case BondGraphElementTypes.INERTANCE:
-                self.bond_graph.add_element(Inertance(inertance = self.default_params['I']))
+        if action['node_or_bond'] == 0: # Node addition
+            element_addition_mask = self.bond_graph.get_element_addition_mask()
+            
+            if element_addition_mask[action['node_type']] == 1:
+                match action['node_type']:
+                    case BondGraphElementTypes.CAPACITANCE.value:
+                        self.bond_graph.add_element(Capacitance(capacitance = self.default_params['C']))
+                        
+                    case BondGraphElementTypes.INERTANCE.value:
+                        self.bond_graph.add_element(Inertance(inertance = self.default_params['I']))
 
-            case BondGraphElementTypes.RESISTANCE:
-                self.bond_graph.add_element(Resistance(resistance = self.default_params['R']))
-                
-            case BondGraphElementTypes.EFFORT_SOURCE:
-                self.bond_graph.add_element(EffortSource())
+                    case BondGraphElementTypes.RESISTANCE.value:
+                        self.bond_graph.add_element(Resistance(resistance = self.default_params['R']))
+                        
+                    case BondGraphElementTypes.EFFORT_SOURCE.value:
+                        self.bond_graph.add_element(EffortSource())
+                            
+                    case BondGraphElementTypes.FLOW_SOURCE.value:
+                        self.bond_graph.add_element(FlowSource())
+                        
+                    case BondGraphElementTypes.ZERO_JUNCTION.value:
+                        self.bond_graph.add_element(ZeroJunction())
+                        
+                    case BondGraphElementTypes.ONE_JUNCTION.value:
+                        self.bond_graph.add_element(OneJunction())
+                        
+                    case _: # Default case
+                        print(action['node_type'])
+                        raise ValueError("Invalid node addition applied in BondGraphEnv.")
                     
-            case BondGraphElementTypes.FLOW_SOURCE:
-                self.bond_graph.add_element(FlowSource())
+                if self.bond_graph.is_valid_solution():
+                    reward = self.bond_graph.reward()*VALID_SOLUTION_REWARD_SCALING
+                else:
+                    reward = INVALID_SOLUTION_REWARD
+            else: 
+                reward = MASKED_ACTION_PENALTY # penalize adding elements that are masked heavily
+
+        else: # Bond addition
+            causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
+            
+            if causal_adjacency_mask[action['bond'][0], action['bond'][1]] == 1: # check if the causality assignment is valid
+                if action['bond'][2] == 0: # 0 corresponds to negative power sign
+                    power_flow_adjacency_mask = power_flow_adjacency_mask.transpose()
+                elif action['bond'][2] == 1:
+                    pass
+                else:
+                    raise ValueError("Incorrect value of bond power sign detected.")
                 
-            case BondGraphElementTypes.ZERO_JUNCTION:
-                self.bond_graph.add_element(ZeroJunction())
-                
-            case BondGraphElementTypes.ONE_JUNCTION:
-                self.bond_graph.add_element(OneJunction())
-            case _: # Default case
-                raise ValueError("Invalid action applied in BondGraphEnv.")
-        
+                if power_flow_adjacency_mask[action['bond'][0], action['bond'][1]] == 1: # check if power flows are valid
+                    if action['bond'][2] == 1: # flip the directionality of edge if necessary to check against the power flow adjacency matrix
+                        self.bond_graph.add_bond(action['bond'][0], action['bond'][1], 1)
+                        if self.bond_graph.is_valid_solution():
+                            reward = self.bond_graph.reward()*VALID_SOLUTION_REWARD_SCALING
+                        else:
+                            reward = INVALID_SOLUTION_REWARD   
+                    else:
+                        reward = MASKED_ACTION_PENALTY
+            else:
+                reward = MASKED_ACTION_PENALTY
+
         observation = self._get_obs()
-        
         info = self._get_info()
         
-        if self.bond_graph.is_valid_solution():
-            reward = self.bond_graph.reward()
-        else:
-            reward = -1
+
             
         terminated = self.bond_graph.at_max_node_size()
 
@@ -111,7 +144,7 @@ class BondGraphEnv(gym.Env):
         
     
     def _get_obs(self):
-        element_types = [self.bond_graph.flow_causal_graph.nodes[node]['element_type'] for node in self.bond_graph.flow_causal_graph.nodes]
+        element_types = [self.bond_graph.flow_causal_graph.nodes[node]['element_type'].value for node in self.bond_graph.flow_causal_graph.nodes]
         element_types_vec = np.array(element_types)
         
         adjacency_matrix = np.array(nx.adjacency_matrix(self.bond_graph.flow_causal_graph).todense(), dtype=np.int32)

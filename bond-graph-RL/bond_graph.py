@@ -174,6 +174,7 @@ class BondGraph():
         """  
         source_elements = [x for x, y in self.flow_causal_graph.nodes(data=True) if is_source_element(y['element_type'])]
         return source_elements
+    
     def get_energy_storage_elements(self):
         """
         Returns a list of energy storage elements in the bond graph.
@@ -217,8 +218,16 @@ class BondGraph():
     def get_bond_addition_mask(self): # TODO: is recomputing the bond addition mask every time the graph updates too computationally expensive? maybe do it iteratively at each node/edge addition
         # Adjacency matrix in standard graph.nodes order
         # u -> v indicates: u imposes flow causality on v, v imposes effort causality on u. v -> u indicates the opposite
-        causal_adjacency_mask = np.full([self.flow_causal_graph.number_of_nodes(), self.flow_causal_graph.number_of_nodes()], 1)
-        power_flow_adjacency_mask = np.full([self.flow_causal_graph.number_of_nodes(), self.flow_causal_graph.number_of_nodes()], 1)
+        
+        # causal_adjacency_mask = np.full([self.flow_causal_graph.number_of_nodes(), self.flow_causal_graph.number_of_nodes()], 1)
+        # power_flow_adjacency_mask = np.full([self.flow_causal_graph.number_of_nodes(), self.flow_causal_graph.number_of_nodes()], 1)
+        
+        causal_adjacency_mask = np.full([self.max_nodes, self.max_nodes], 1)
+        power_flow_adjacency_mask = np.full([self.max_nodes, self.max_nodes], 1)
+        
+        # Prevent bonds added on nodes that do not exist
+        causal_adjacency_mask[self.flow_causal_graph.number_of_nodes():, :] = 0
+        causal_adjacency_mask[:, self.flow_causal_graph.number_of_nodes():] = 0
         
         # Prevent bonds between the same node
         np.fill_diagonal(causal_adjacency_mask, 0)
@@ -230,6 +239,7 @@ class BondGraph():
                 causal_adjacency_mask[node, :] = 0
                 causal_adjacency_mask[:, node] = 0
             
+            
             # Enforce deterministic flow/effort causality on 1 and 0 junctions (a single causal source)
             if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.ZERO_JUNCTION:
                 if self.flow_causal_graph.out_degree(node) == 1:
@@ -238,7 +248,15 @@ class BondGraph():
             if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.ONE_JUNCTION:
                 if self.flow_causal_graph.in_degree(node) == 1:
                     causal_adjacency_mask[:, node] = 0
-        
+                    
+            # Prevent effort causality being imposed on effort source
+            if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.EFFORT_SOURCE:
+                causal_adjacency_mask[:, node] == 0
+            
+            # Prevent flow causality being imposed on flow source
+            if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.FLOW_SOURCE:
+                causal_adjacency_mask[node, :] == 0
+            
             # Prohibit power flowing into sources
             if is_source_element(self.flow_causal_graph.nodes[node]['element_type']):
                 power_flow_adjacency_mask[:, node] = 0
@@ -250,10 +268,11 @@ class BondGraph():
                 # Prohibit integral causality on states
                 # TODO: add integral causality functionality in future
                 if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.CAPACITANCE:
-                    causal_adjacency_mask[node, :] = 0 # Prohibit imposed effort causality into capacitance
+                    causal_adjacency_mask[:, node] = 0 # Prohibit imposed effort causality into capacitance
                 if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.INERTANCE:
-                    causal_adjacency_mask[:, node] = 0 # Prohibit imposed flow causality into inertance
+                    causal_adjacency_mask[node, :] = 0 # Prohibit imposed flow causality into inertance
                         
+        
         return causal_adjacency_mask, power_flow_adjacency_mask
         
 

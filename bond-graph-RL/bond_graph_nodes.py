@@ -25,8 +25,8 @@ class BondGraphElementTypes(Enum):
     ONE_JUNCTION = 6
     
     # Two-ports
-    TRANSFORMER = 7
-    GYRATOR = 8
+    # TRANSFORMER = 7
+    # GYRATOR = 8
     
 class BondGraphElementTypesEncoder(json.JSONEncoder):
     def default(self, obj):
