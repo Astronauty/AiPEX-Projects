@@ -9,24 +9,24 @@ import functools
 
 # enums for tracking standard bond graph variable and node types
 class BondGraphElementTypes(Enum):
-    NONE = -1
-    
-    # Passive 1-ports
-    CAPACITANCE = 0
-    INERTANCE = 1
-    RESISTANCE = 2
+    NONE = 0 #TODO: temp change for gym multidiscrete compatibility
     
     # Active 1-ports
-    EFFORT_SOURCE = 3
-    FLOW_SOURCE = 4
+    EFFORT_SOURCE = 1
+    FLOW_SOURCE = 2
     
     # Multiport/junctions
-    ZERO_JUNCTION = 5
-    ONE_JUNCTION = 6
+    ZERO_JUNCTION = 3
+    ONE_JUNCTION = 4
+    
+    # Passive 1-ports   
+    CAPACITANCE = 5
+    INERTANCE = 6
+    RESISTANCE = 7
     
     # Two-ports
-    # TRANSFORMER = 7
-    # GYRATOR = 8
+    # TRANSFORMER = 8
+    # GYRATOR = 9
     
 class BondGraphElementTypesEncoder(json.JSONEncoder):
     def default(self, obj):

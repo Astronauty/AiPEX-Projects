@@ -97,7 +97,6 @@ class BondGraph():
             case BondGraphElementTypes.ONE_JUNCTION:
                 element_label = f"1_{self.i}"
                 
-                
             case _: # Default case
                 raise ValueError("Invalid element type")
         
@@ -156,9 +155,9 @@ class BondGraph():
         num_energy_storage_elements = len(self.get_energy_storage_elements())
 
         if self.flow_causal_graph.number_of_nodes() < self.max_nodes:
-            allowable_element_types = np.full(len(BondGraphElementTypes)-1, 1) # Filter the allowable element types based on the number of energy storage elements
+            allowable_element_types = np.full(len(BondGraphElementTypes), 1) # Filter the allowable element types based on the number of energy storage elements
         else:
-            allowable_element_types = np.full(len(BondGraphElementTypes)-1, 0) # Do not allow addition of any nodes if max number of elements is reached
+            allowable_element_types = np.full(len(BondGraphElementTypes), 0) # Do not allow addition of any nodes if max number of elements is reached
             return allowable_element_types
         
          # Remove energy storage element types based on number of states
@@ -191,29 +190,12 @@ class BondGraph():
 
         return n_port_elements
     
-
-    # def is_permitted_bond(self, u, v, power_sign):
-    #     """
-    #     Checks if a bond is permitted between two nodes. u -> v indicates causality while node attribute  (Implemented in addition to get_bond_addition_mask for efficiency purposes)
-    #     """
-    #     # Prohibit adding bonds to elements that have max ports already
-    #     if self.graph.nodes[u]['max_ports'] == len(self.graph[u]) or self.graph.nodes[v]['max_ports'] == len(self.graph[u]):
-    #         return False
-        
-    #     # Prohibit power flowing into sources
-    #     elif is_source_element(self.graph.nodes[v]['element_type']) and power_sign > 0:
-    #         return False
-        
-    #     elif is_source_element(self.graph.nodes[u]['element_type']) and power_sign < 0:
-    #         return False
-        
-    #     # Prohibit power flowing out of passive 1-ports
-    #     elif is_passive_1port(self.graph.nodes[u]['element_type']) and power_sign < 0:
-    #         return False
-    #     elif is_passive_1port(self.graph.nodes[v]['element_type']) and power_sign > 0:
-    #         return False
-            
-    #     return True
+    def get_parameters(self):
+        parameters = np.zeros(self.max_nodes)
+        for node_index, node_data in self.flow_causal_graph.nodes(data=True):
+            if node_index in self.flow_causal_graph.nodes and is_energy_storage_element(node_data['element_type']):
+                parameters[node_index] = list(node_data['params'].values())[0]
+        return parameters
     
     def get_bond_addition_mask(self): # TODO: is recomputing the bond addition mask every time the graph updates too computationally expensive? maybe do it iteratively at each node/edge addition
         # Adjacency matrix in standard graph.nodes order
@@ -268,9 +250,9 @@ class BondGraph():
                 # Prohibit integral causality on states
                 # TODO: add integral causality functionality in future
                 if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.CAPACITANCE:
-                    causal_adjacency_mask[:, node] = 0 # Prohibit imposed effort causality into capacitance
+                    causal_adjacency_mask[node, :] = 0 # Prohibit imposed effort causality into capacitance
                 if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.INERTANCE:
-                    causal_adjacency_mask[node, :] = 0 # Prohibit imposed flow causality into inertance
+                    causal_adjacency_mask[:, node] = 0 # Prohibit imposed flow causality into inertance
                         
         
         return causal_adjacency_mask, power_flow_adjacency_mask
@@ -525,7 +507,7 @@ class BondGraph():
         x0 = np.zeros(len(self.get_energy_storage_elements()))
         y = odeint(self.dynamics, x0, self.time_array, args=(u,))
         
-        r = 10*np.linalg.norm(y[:,0], np.inf) + np.linalg.norm(y[:,1], np.inf)
+        r = np.linalg.norm(y[:,0], np.inf) 
         
         return r
         
