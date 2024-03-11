@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+C:\Users\Daniel\Documents\Python Projects\AiPEX-Projects\pyg-tutorial\data\raw
+
 # C extensions
 *.so
 

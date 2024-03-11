@@ -152,24 +152,19 @@ class Resistance(BondGraphNode):
 
 # Active 1-Ports
 class EffortSource(BondGraphNode):
-    def __init__(self, effort_src:np.ndarray): 
+    def __init__(self): 
         """Specifies an effort source in the bond graph.
-
         Args:
             effort_src (_type_): The effort source input vector (elements correspond to each point in time).
         """
         super().__init__(element_type=BondGraphElementTypes.EFFORT_SOURCE, max_ports=1)
-        self.Se = effort_src
+
         pass
     
-    def get_effort_expr(self):
-        return self.e
-    
-    def get_flow_expr(self):
-        return None
-    
-    def get_state_var(self):
-        return None
+class FlowSource(BondGraphNode):
+    def __init__(self):
+        super().__init__(element_type=BondGraphElementTypes.FLOW_SOURCE, max_ports=1)
+
 
 # Passive multiport/junctions
 class OneJunction(BondGraphNode):

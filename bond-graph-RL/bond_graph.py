@@ -4,13 +4,15 @@ import networkx as nx
 import numpy as np
 from sympy import *
 import copy
+from scipy import *
+from scipy.integrate import odeint
 
 from bond_graph_edges import *
 from bond_graph_nodes import *
 
 
 class BondGraph():
-    def __init__(self, max_nodes, num_states, num_effort_sources:int=0, num_flow_sources:int=0, time_array:np.ndarray=None): # TODO: Add time array
+    def __init__(self, max_nodes, max_states, time_array, num_effort_sources:int=0, num_flow_sources:int=0,): 
         """
         Creates a BondGraph system with a specified number of flow and effort sources to start.
 
@@ -19,9 +21,13 @@ class BondGraph():
             num_flow_sources (int): _description_
         """
         self.max_nodes = max_nodes
-        self.num_states = num_states
+        self.num_states = max_states
+        self.time_array = time_array
+        
+        
         self.num_effort_sources = num_effort_sources
         self.num_flow_sources = num_flow_sources
+        
         self.i = 0 # index for incrementally labeling nodes
         
         self.flow_causal_graph = nx.DiGraph()
@@ -39,7 +45,7 @@ class BondGraph():
         # TODO: temp parsing for including attributes from BondGraphNode into the graph, but this should be done in a more elegant way
         element_type = node.element_type
         max_ports = node.max_ports
-        causality = node.causality
+        # causality = node.causality
         node_index = self.i
         params = node.params
 
@@ -48,7 +54,9 @@ class BondGraph():
         if element_addition_mask[element_type.value] == 0:   
             raise ValueError(f"element type {element_type} is masked and cannot be added to the bond graph.")
 
-        self.flow_causal_graph.add_node(node_index, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=causality, params=params) # TODO: entire node class is stored in networkx attributes, but this is redundant
+        # self.flow_causal_graph.add_node(node_index, element_type=element_type, node_index=node_index, max_ports=max_ports, causality=causality, params=params) # TODO: entire node class is stored in networkx attributes, but this is redundant
+        self.flow_causal_graph.add_node(node_index, element_type=element_type, max_ports=max_ports, params=params) 
+        
         # Generate element labels in format {element_type}_{index}
         match element_type:
             case BondGraphElementTypes.CAPACITANCE:
@@ -97,6 +105,9 @@ class BondGraph():
         
         self.i += 1
         
+        if self.is_valid_solution(): 
+            self.update_state_space_matrix(verbose=False) 
+              
         pass
     
     def add_bond(self, u:int, v:int, power_sign:int):
@@ -129,16 +140,25 @@ class BondGraph():
         e = Symbol(f"e_{u}:{v}")
         f = Symbol(f"f_{u}:{v}")
         self.flow_causal_graph.add_edge(u, v, power_sign=power_sign, e=e, f=f)
+        
+        if self.is_valid_solution():
+            self.update_state_space_matrix(verbose=False) 
             
         pass
     
     def get_element_addition_mask(self):
+        """
+        Specifies allowable element types to add to the bond graph in its current state.
+
+        Returns:
+            _nparray_: Array of 0 or 
+        """
         num_energy_storage_elements = len(self.get_energy_storage_elements())
 
         if self.flow_causal_graph.number_of_nodes() < self.max_nodes:
-            allowable_element_types = np.full(len(BondGraphElementTypes), 1) # Filter the allowable element types based on the number of energy storage elements
+            allowable_element_types = np.full(len(BondGraphElementTypes)-1, 1) # Filter the allowable element types based on the number of energy storage elements
         else:
-            allowable_element_types = np.full(len(BondGraphElementTypes), 0) # Do not allow addition of any nodes if max number of elements is reached
+            allowable_element_types = np.full(len(BondGraphElementTypes)-1, 0) # Do not allow addition of any nodes if max number of elements is reached
             return allowable_element_types
         
          # Remove energy storage element types based on number of states
@@ -253,8 +273,6 @@ class BondGraph():
         
         effort_successors = list(self.effort_causal_graph.successors(node_index))
         num_effort_successors = len(effort_successors)
-        
-        
         
         expr = []
         
@@ -422,5 +440,74 @@ class BondGraph():
         x = x.flatten()
         
         return x[0:len(self.state_derivative_vars)]
+    
+    def at_max_node_size(self):
+        return self.flow_causal_graph.number_of_nodes() == self.max_nodes
+    
+    def is_valid_solution(self):
+        if not nx.is_weakly_connected(self.flow_causal_graph):
+            return False
+        
+ 
+        
+        # Check if causality conditions are staisfied
+        for node_index in self.flow_causal_graph.nodes:
+            flow_in_bonds = list(self.flow_causal_graph.predecessors(node_index))
+            num_flow_predecessors = len(flow_in_bonds)
+            
+            flow_out_bonds = list(self.flow_causal_graph.successors(node_index))
+            num_flow_successors = len(flow_out_bonds)
+            
+            effort_predecessors = list(self.effort_causal_graph.predecessors(node_index))
+            num_effort_predecessors = len(effort_predecessors)
+            
+            effort_successors = list(self.effort_causal_graph.successors(node_index))
+            num_effort_successors = len(effort_successors)
+            
+            node = self.flow_causal_graph.nodes[node_index]
+            match node['element_type']:
+                case BondGraphElementTypes.CAPACITANCE:
+                    if num_flow_predecessors != 1:
+                        return False
+
+                case BondGraphElementTypes.INERTANCE:
+                    if num_effort_predecessors != 1:
+                        return False
+                
+                case BondGraphElementTypes.RESISTANCE:
+                    if num_effort_predecessors!=1 or num_flow_predecessors!=1:
+                        return False
+                    
+                case BondGraphElementTypes.EFFORT_SOURCE:
+                    if num_effort_successors != 1:
+                        return False
+
+                case BondGraphElementTypes.FLOW_SOURCE:
+                    if num_flow_successors != 1:
+                        return False
+
+                case BondGraphElementTypes.ZERO_JUNCTION:  
+                    effort_in_bonds = list(self.effort_causal_graph.in_edges(node, data=True))
+                    if len(effort_in_bonds) != 1: # Make sure there is only one flow causality source
+                        return False
+
+                case BondGraphElementTypes.ONE_JUNCTION:
+                    flow_in_bonds = list(self.flow_causal_graph.in_edges(node, data=True))
+                    if len(flow_in_bonds) != 1: # Make sure there is only one flow causality source
+                        return False
+        
+        return True
+    
+    
+    def reward(self):
+        omega = 2*np.pi*5 
+        u = lambda t: [np.sin(omega*t)]
+        
+        x0 = np.zeros(len(self.get_energy_storage_elements()))
+        y = odeint(self.dynamics, x0, self.time_array, args=(u,))
+        
+        r = 10*np.linalg.norm(y[:,0], np.inf) + np.linalg.norm(y[:,1], np.inf)
+        
+        return r
         
 
