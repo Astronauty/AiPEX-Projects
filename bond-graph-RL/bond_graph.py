@@ -215,13 +215,19 @@ class BondGraph():
         np.fill_diagonal(causal_adjacency_mask, 0)
         np.fill_diagonal(power_flow_adjacency_mask, 0)
         
+        # Prevent the same edge from being added again
+ 
+        
+        for edge_pair in list(self.flow_causal_graph.edges):
+            causal_adjacency_mask[edge_pair[0], edge_pair[1]] = 0
+        
         for node in self.flow_causal_graph.nodes:
             # Prohibit adding bonds to elements that have max ports already
-            if self.flow_causal_graph.nodes[node]['max_ports'] == len(self.flow_causal_graph[node]):
+            if self.flow_causal_graph.nodes[node]['max_ports'] == (self.flow_causal_graph.out_degree(node) + self.flow_causal_graph.in_degree(node)):
                 causal_adjacency_mask[node, :] = 0
                 causal_adjacency_mask[:, node] = 0
             
-            
+
             # Enforce deterministic flow/effort causality on 1 and 0 junctions (a single causal source)
             if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.ZERO_JUNCTION:
                 if self.flow_causal_graph.out_degree(node) == 1:
@@ -233,11 +239,17 @@ class BondGraph():
                     
             # Prevent effort causality being imposed on effort source
             if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.EFFORT_SOURCE:
-                causal_adjacency_mask[:, node] == 0
+                causal_adjacency_mask[node, :] = 0
+                
+                for node2 in self.flow_causal_graph.nodes: # prevent direct connections of effort source to passive one-junctions
+                    if is_passive_1port(self.flow_causal_graph.nodes[node2]['element_type']):
+                        causal_adjacency_mask[node, node2] = 0
+                        causal_adjacency_mask[node2, node] = 0
+                    
             
             # Prevent flow causality being imposed on flow source
             if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.FLOW_SOURCE:
-                causal_adjacency_mask[node, :] == 0
+                causal_adjacency_mask[:, node] = 0
             
             # Prohibit power flowing into sources
             if is_source_element(self.flow_causal_graph.nodes[node]['element_type']):
@@ -253,6 +265,11 @@ class BondGraph():
                     causal_adjacency_mask[node, :] = 0 # Prohibit imposed effort causality into capacitance
                 if self.flow_causal_graph.nodes[node]['element_type'] == BondGraphElementTypes.INERTANCE:
                     causal_adjacency_mask[:, node] = 0 # Prohibit imposed flow causality into inertance
+                    
+                    for node2 in self.flow_causal_graph.nodes: # prevent 1-ports from connecting to each other
+                        if is_passive_1port(self.flow_causal_graph.nodes[node2]['element_type']):
+                            causal_adjacency_mask[node, node2] = 0
+                            causal_adjacency_mask[node2, node] = 0
                         
         
         return causal_adjacency_mask, power_flow_adjacency_mask
@@ -331,7 +348,7 @@ class BondGraph():
 
                 # Power conservation via sum of flows equaling zero
                 expr.append(Eq(effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_in_bonds[0][EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'], \
-                    sum(effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for effort_out_bond in flow_out_bonds)))
+                    sum(effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['f']*effort_out_bond[EDGE_ATTRIBUTE_DICTIONARY_INDEX]['power_sign'] for effort_out_bond in effort_out_bonds)))
                 
                 # All efforts equal each other
                 for effort_out_bond in effort_out_bonds:
@@ -445,11 +462,11 @@ class BondGraph():
     def at_max_node_size(self):
         return self.flow_causal_graph.number_of_nodes() == self.max_nodes
     
-    def is_valid_solution(self):
+    def is_valid_solution(self, verbose=False):
         if not nx.is_weakly_connected(self.flow_causal_graph):
+            if verbose:
+                print("Not connected")
             return False
-        
- 
         
         # Check if causality conditions are staisfied
         for node_index in self.flow_causal_graph.nodes:
@@ -466,21 +483,28 @@ class BondGraph():
             num_effort_successors = len(effort_successors)
             
             node = self.flow_causal_graph.nodes[node_index]
+
             match node['element_type']:
                 case BondGraphElementTypes.CAPACITANCE:
                     if num_flow_predecessors != 1:
+                        if verbose: 
+                            print("Capcitance") 
                         return False
 
                 case BondGraphElementTypes.INERTANCE:
                     if num_effort_predecessors != 1:
+                        if verbose: 
+                            print("Inertance") 
                         return False
                 
                 case BondGraphElementTypes.RESISTANCE:
                     if num_effort_predecessors!=1 or num_flow_predecessors!=1:
+                        if verbose: print("Resistance") 
                         return False
                     
                 case BondGraphElementTypes.EFFORT_SOURCE:
                     if num_effort_successors != 1:
+                        if verbose: print("Effort") 
                         return False
 
                 case BondGraphElementTypes.FLOW_SOURCE:
@@ -488,13 +512,18 @@ class BondGraph():
                         return False
 
                 case BondGraphElementTypes.ZERO_JUNCTION:  
-                    effort_in_bonds = list(self.effort_causal_graph.in_edges(node, data=True))
-                    if len(effort_in_bonds) != 1: # Make sure there is only one flow causality source
+                    num_effort_in_bonds = self.effort_causal_graph.in_degree(node_index)
+                    if num_effort_in_bonds != 1: # Make sure there is only one flow causality source
+                        if verbose: 
+                            print("Zero Junction") 
                         return False
 
                 case BondGraphElementTypes.ONE_JUNCTION:
-                    flow_in_bonds = list(self.flow_causal_graph.in_edges(node, data=True))
-                    if len(flow_in_bonds) != 1: # Make sure there is only one flow causality source
+                    num_flow_in_bonds = self.flow_causal_graph.in_degree(node_index)
+   
+                    if num_flow_in_bonds != 1: # Make sure there is only one flow causality source
+                        if verbose: 
+                            print("One Junction") 
                         return False
         
         return True
@@ -503,11 +532,14 @@ class BondGraph():
     def reward(self):
         omega = 2*np.pi*5 
         u = lambda t: [np.sin(omega*t)]
-        
-        x0 = np.zeros(len(self.get_energy_storage_elements()))
-        y = odeint(self.dynamics, x0, self.time_array, args=(u,))
-        
-        r = np.linalg.norm(y[:,0], np.inf) 
+        try:
+            x0 = np.zeros(len(self.get_energy_storage_elements()))
+            y = odeint(self.dynamics, x0, self.time_array, args=(u,))
+            
+            r = np.linalg.norm(y[:,0], np.inf) 
+        except np.linalg.LinAlgError:
+            print("Singular value matrix detected. Cannot solve.")
+            r = -100
         
         return r
         

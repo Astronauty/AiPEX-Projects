@@ -10,11 +10,12 @@ import random
 import copy
 from gymnasium.envs.registration import register
 
-VALID_SOLUTION_REWARD_SCALING = 10
+OBJECTIVE_REWARD_SCALING = 100
+VALID_SOLUTION_REWARD = 100
 INVALID_SOLUTION_REWARD = -1
-MASKED_ACTION_PENALTY = -100
+MASKED_ACTION_PENALTY = -10
 
-MAX_PARAM_VAL = 50
+MAX_PARAM_VAL = 10
 
 class BondGraphEnv(gym.Env):
     def __init__(self, seed, seed_graph, max_nodes, default_params):
@@ -49,6 +50,8 @@ class BondGraphEnv(gym.Env):
             }
         )
         
+        self.flattened_action_space = spaces.utils.flatten_space(self.action_space)
+        
         # Observation space definition
         adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int32) # represents the flow-causal adacency matrix
         node_type_space = spaces.MultiDiscrete([num_node_types]*max_nodes, seed=seed) # look at up to the number of max_nodes
@@ -62,6 +65,8 @@ class BondGraphEnv(gym.Env):
             }
         )
         
+        self.flattened_observation_space = spaces.utils.flatten_space(self.observation_space)
+        
         self.render_mode = None
 
     
@@ -73,12 +78,16 @@ class BondGraphEnv(gym.Env):
         
         observation = self._get_obs()
         info = self._get_info()
-        return observation, info
+        # return observation, info
+        return spaces.utils.flatten(self.observation_space, observation), info
 
     def step(self, action):  
+        element_addition_mask = self.bond_graph.get_element_addition_mask()
+        causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
+        
         
         if action['node_or_bond'] == 0: # Node addition
-            element_addition_mask = self.bond_graph.get_element_addition_mask()
+            # element_addition_mask = self.bond_graph.get_element_addition_mask()
             
             if element_addition_mask[action['node_type']] == 1:
                 match action['node_type']:
@@ -111,14 +120,14 @@ class BondGraphEnv(gym.Env):
                         raise ValueError("Invalid node addition applied in BondGraphEnv.")
                     
                 if self.bond_graph.is_valid_solution():
-                    reward = self.bond_graph.reward()*VALID_SOLUTION_REWARD_SCALING
+                    reward = VALID_SOLUTION_REWARD + self.bond_graph.reward()*OBJECTIVE_REWARD_SCALING
                 else:
                     reward = INVALID_SOLUTION_REWARD
             else: 
                 reward = MASKED_ACTION_PENALTY # penalize adding elements that are masked heavily
 
         else: # Bond addition
-            causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
+            # causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
             
             if causal_adjacency_mask[action['bond'][0], action['bond'][1]] == 1: # check if the causality assignment is valid
                 if action['bond'][2] == 0: # 0 corresponds to negative power sign
@@ -132,13 +141,13 @@ class BondGraphEnv(gym.Env):
                     if action['bond'][2] == 1: #
                         self.bond_graph.add_bond(action['bond'][0], action['bond'][1], 1)
                         if self.bond_graph.is_valid_solution():
-                            reward = self.bond_graph.reward()*VALID_SOLUTION_REWARD_SCALING
+                            reward = VALID_SOLUTION_REWARD +  self.bond_graph.reward()*OBJECTIVE_REWARD_SCALING
                         else:
                             reward = INVALID_SOLUTION_REWARD   
                     else:
                         self.bond_graph.add_bond(action['bond'][0], action['bond'][1], -1)
                         if self.bond_graph.is_valid_solution():
-                            reward = self.bond_graph.reward()*VALID_SOLUTION_REWARD_SCALING
+                            reward =  VALID_SOLUTION_REWARD + self.bond_graph.reward()*OBJECTIVE_REWARD_SCALING
                         else:
                             reward = INVALID_SOLUTION_REWARD   
                 else:
@@ -149,9 +158,8 @@ class BondGraphEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
         
-
-            
-        terminated = self.bond_graph.at_max_node_size()
+        # Several conditions for terminating episode: no edge additions possible, no element additions possible, or max node size
+        terminated = self.bond_graph.at_max_node_size() and np.all(causal_adjacency_mask == 0) and np.all(element_addition_mask == 0)
 
         return observation, reward, terminated, False, info
         
@@ -173,14 +181,22 @@ class BondGraphEnv(gym.Env):
         num_cols_to_pad = num_rows_to_pad
         adjacency_matrix = np.pad(adjacency_matrix, ((0, num_rows_to_pad), (0, num_cols_to_pad)), 'constant')
         
-        return {'node_type_space': element_types_vec, 'node_param_space': node_param_space,'adjacency_matrix_space': adjacency_matrix}
+        observation = {'node_type_space': element_types_vec, 'node_param_space': node_param_space,'adjacency_matrix_space': adjacency_matrix}
+    
+        # observation = {
+        #     'node_type_space': element_types_vec.flatten(),
+        #     'node_param_space': node_param_space.flatten(),
+        #     'adjacency_matrix_space': adjacency_matrix.flatten()
+        # }
+        return observation
     
     def _get_info(self):
         num_nodes = self.bond_graph.flow_causal_graph.number_of_nodes()
-        node_info = self.bond_graph.flow_causal_graph.nodes(data=True)
+        valid_solution = self.bond_graph.is_valid_solution()
+        
         
         return {
             "num_nodes": num_nodes,
-            "node_info": node_info,
+            "valid solution": valid_solution,
         }
         
