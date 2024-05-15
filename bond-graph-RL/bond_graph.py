@@ -536,10 +536,11 @@ class BondGraph():
             x0 = np.zeros(len(self.get_energy_storage_elements()))
             y = odeint(self.dynamics, x0, self.time_array, args=(u,))
             
-            r = np.linalg.norm(y[:,0], np.inf) 
+            # r = np.linalg.norm(y[:,0], np.inf) 
+            r = -np.log10(np.linalg.norm(y[:,0], 2))
         except np.linalg.LinAlgError:
             print("Singular value matrix detected. Cannot solve.")
-            r = -100
+            r = -1000
         
         return r
         

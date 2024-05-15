@@ -9,6 +9,7 @@ from itertools import permutations
 import random
 import copy
 from gymnasium.envs.registration import register
+from collections import *
 
 OBJECTIVE_REWARD_SCALING = 100
 VALID_SOLUTION_REWARD = 100
@@ -26,7 +27,8 @@ class BondGraphEnv(gym.Env):
         
         self.bond_graph = copy.deepcopy(seed_graph)
         
-        num_node_types = len(BondGraphElementTypes)
+        self.num_node_types = len(BondGraphElementTypes)
+        
         
         # num_edge_actions = math.permute(max_nodes, 2)*2 # Multiply by 2 for bond causality
         # num_node_actions = num_node_types**max_nodes # Max number of nodes allowed in bg times number of node types
@@ -38,7 +40,7 @@ class BondGraphEnv(gym.Env):
     
 
         # Action space definition
-        add_node_space = spaces.Discrete(num_node_types-3, start=3, seed=seed) # node additions correspond to choosing what type you want, don't include the NONE type for adding
+        add_node_space = spaces.Discrete(self.num_node_types-3, start=3, seed=seed) # node additions correspond to choosing what type you want, don't include the NONE type for adding
         add_edge_space = spaces.MultiDiscrete([max_nodes, max_nodes, 2], seed=seed) # edge additions sample space
 
         self.action_space = spaces.Dict(
@@ -54,7 +56,7 @@ class BondGraphEnv(gym.Env):
         
         # Observation space definition
         adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int32) # represents the flow-causal adacency matrix
-        node_type_space = spaces.MultiDiscrete([num_node_types]*max_nodes, seed=seed) # look at up to the number of max_nodes
+        node_type_space = spaces.MultiDiscrete([self.num_node_types]*max_nodes, seed=seed) # look at up to the number of max_nodes
         node_parameter_space = spaces.MultiDiscrete([MAX_PARAM_VAL]*max_nodes, seed=seed)
         
         self.observation_space = spaces.Dict(
@@ -78,13 +80,12 @@ class BondGraphEnv(gym.Env):
         
         observation = self._get_obs()
         info = self._get_info()
-        # return observation, info
-        return spaces.utils.flatten(self.observation_space, observation), info
+        return observation, info
+        # return spaces.utils.flatten(self.observation_space, observation), info
 
     def step(self, action):  
         element_addition_mask = self.bond_graph.get_element_addition_mask()
         causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
-        
         
         if action['node_or_bond'] == 0: # Node addition
             # element_addition_mask = self.bond_graph.get_element_addition_mask()
@@ -161,7 +162,10 @@ class BondGraphEnv(gym.Env):
         # Several conditions for terminating episode: no edge additions possible, no element additions possible, or max node size
         terminated = self.bond_graph.at_max_node_size() and np.all(causal_adjacency_mask == 0) and np.all(element_addition_mask == 0)
 
+
         return observation, reward, terminated, False, info
+        
+        # return spaces.utils.flatten(self.observation_space, observation), reward, terminated, False, info
         
     
     def _get_obs(self):
@@ -176,18 +180,21 @@ class BondGraphEnv(gym.Env):
         node_param_space = self.bond_graph.get_parameters()
       
         # Adjacency matrix and padding
-        adjacency_matrix = np.array(nx.adjacency_matrix(self.bond_graph.flow_causal_graph).todense(), dtype=np.int32)
+        adjacency_matrix = np.array(nx.adjacency_matrix(self.bond_graph.flow_causal_graph).todense(), dtype=np.int64)
         num_rows_to_pad = self.max_nodes - adjacency_matrix.shape[0]
         num_cols_to_pad = num_rows_to_pad
         adjacency_matrix = np.pad(adjacency_matrix, ((0, num_rows_to_pad), (0, num_cols_to_pad)), 'constant')
         
-        observation = {'node_type_space': element_types_vec, 'node_param_space': node_param_space,'adjacency_matrix_space': adjacency_matrix}
-    
-        # observation = {
-        #     'node_type_space': element_types_vec.flatten(),
-        #     'node_param_space': node_param_space.flatten(),
-        #     'adjacency_matrix_space': adjacency_matrix.flatten()
-        # }
+        # observation = {'node_type_space': element_types_vec, 'node_param_space': node_param_space,'adjacency_matrix_space': adjacency_matrix}
+        
+        # print(type(element_types_vec))
+        # print(type(node_param_space))
+        # print(type(adjacency_matrix))
+        
+        observation = OrderedDict([('adjacency_matrix_space', adjacency_matrix.astype(np.int64)),('node_param_space', node_param_space.astype(np.int64)), ('node_type_space', element_types_vec.astype(np.int64))])
+
+        # flattened_observation = spaces.utils.flatten(self.observation_space, observation)
+        
         return observation
     
     def _get_info(self):
