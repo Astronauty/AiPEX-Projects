@@ -9,6 +9,7 @@ from itertools import permutations
 import random
 import copy
 from gymnasium.envs.registration import register
+from gymnasium.wrappers import FlattenObservation
 from collections import *
 
 OBJECTIVE_REWARD_SCALING = 100
@@ -55,7 +56,7 @@ class BondGraphEnv(gym.Env):
         self.flattened_action_space = spaces.utils.flatten_space(self.action_space)
         
         # Observation space definition
-        adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int32) # represents the flow-causal adacency matrix
+        adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int64) # represents the flow-causal adacency matrix
         node_type_space = spaces.MultiDiscrete([self.num_node_types]*max_nodes, seed=seed) # look at up to the number of max_nodes
         node_parameter_space = spaces.MultiDiscrete([MAX_PARAM_VAL]*max_nodes, seed=seed)
         
@@ -177,7 +178,7 @@ class BondGraphEnv(gym.Env):
         element_types_vec = np.pad(element_types_vec, (0, num_unfilled_nodes),'constant', constant_values=BondGraphElementTypes.NONE.value)
         
         # Paramter values of nodes
-        node_param_space = self.bond_graph.get_parameters()
+        node_params = self.bond_graph.get_parameters()
       
         # Adjacency matrix and padding
         adjacency_matrix = np.array(nx.adjacency_matrix(self.bond_graph.flow_causal_graph).todense(), dtype=np.int64)
@@ -191,19 +192,25 @@ class BondGraphEnv(gym.Env):
         # print(type(node_param_space))
         # print(type(adjacency_matrix))
         
-        observation = OrderedDict([('adjacency_matrix_space', adjacency_matrix.astype(np.int64)),('node_param_space', node_param_space.astype(np.int64)), ('node_type_space', element_types_vec.astype(np.int64))])
+        observation = OrderedDict([('adjacency_matrix_space', adjacency_matrix.astype(np.int64)),('node_param_space', node_params.astype(np.int64)), ('node_type_space', element_types_vec.astype(np.int64))])
+        # observation = {
+        #     "adjacency_matrix_space": adjacency_matrix,
+        #     "node_type_space": element_types_vec,
+        #     "node_param_space": node_params
+        # }
 
         # flattened_observation = spaces.utils.flatten(self.observation_space, observation)
         
         return observation
-    
+        # return element_types_vec, node_param_space, adjacency_matrix
+
     def _get_info(self):
-        num_nodes = self.bond_graph.flow_causal_graph.number_of_nodes()
+        # num_nodes = self.bond_graph.flow_causal_graph.number_of_nodes()
         valid_solution = self.bond_graph.is_valid_solution()
         
         
         return {
-            "num_nodes": num_nodes,
-            "valid solution": valid_solution,
+            "bond_graph": self.bond_graph,
+            "valid_solution": valid_solution,
         }
         
