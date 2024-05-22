@@ -17,6 +17,7 @@ VALID_SOLUTION_REWARD = 100
 INVALID_SOLUTION_REWARD = -1
 MASKED_ACTION_PENALTY = -10
 
+MIN_PARAM_VAL = 1
 MAX_PARAM_VAL = 10
 
 class BondGraphEnv(gym.Env):
@@ -25,24 +26,21 @@ class BondGraphEnv(gym.Env):
         self.seed_graph = seed_graph
         self.max_nodes = max_nodes 
         self.default_params = default_params
-        
+
         self.bond_graph = copy.deepcopy(seed_graph)
-        
         self.num_node_types = len(BondGraphElementTypes)
         
-        
-        # num_edge_actions = math.permute(max_nodes, 2)*2 # Multiply by 2 for bond causality
-        # num_node_actions = num_node_types**max_nodes # Max number of nodes allowed in bg times number of node types
-        
-        # self.possible_edge_list = permutations(range(max_nodes), 2)
+        # Create custom mapping of integer actions to composite actions
+        self.action_space_indices = []
+        self.create_action_space_integer_mapping()
+        self.action_space_size = len(self.action_space_indices)
 
-        # self.bond_graph_space = spaces.Discrete(max_bond_graphs)
-        # self.bond_graph_list = []
-    
 
         # Action space definition
         add_node_space = spaces.Discrete(self.num_node_types-3, start=3, seed=seed) # node additions correspond to choosing what type you want, don't include the NONE type for adding
         add_edge_space = spaces.MultiDiscrete([max_nodes, max_nodes, 2], seed=seed) # edge additions sample space
+
+        bond_sign = spaces.Discrete(2, start=0, seed=seed)
 
         self.action_space = spaces.Dict(
             {
@@ -53,7 +51,10 @@ class BondGraphEnv(gym.Env):
             }
         )
         
-        self.flattened_action_space = spaces.utils.flatten_space(self.action_space)
+        self.integer_action_space = spaces.Discrete(self.action_space_size, seed=seed)
+
+
+        # self.flattened_action_space = spaces.utils.flatten_space(self.action_space)
         
         # Observation space definition
         adjacency_matrix_space = spaces.Box(low=0, high=1, shape=(max_nodes, max_nodes), dtype=np.int64) # represents the flow-causal adacency matrix
@@ -67,12 +68,45 @@ class BondGraphEnv(gym.Env):
                 "node_param_space": node_parameter_space
             }
         )
-        
+    
         self.flattened_observation_space = spaces.utils.flatten_space(self.observation_space)
         
         self.render_mode = None
-
     
+    # Convert the composite action space into a discrete space for compatibility with DQN
+    def create_action_space_integer_mapping(self): 
+        # 0: node or bond
+        # 1: node type
+        # 2: node parameter value
+        # 3: first node for bond creation
+        # 4: second node for bond creation
+        # 5: bond sign
+
+        for node_or_bond in range(2):
+            for node_type in range(3, self.num_node_types):
+                for node_param in range(MIN_PARAM_VAL, MAX_PARAM_VAL):
+                    for bond1 in range(self.max_nodes):
+                        for bond2 in range(self.max_nodes):
+                            for bond_sign in range(2):
+                                action_index = [node_or_bond, node_type, node_param, bond1, bond2, bond_sign]
+                                self.action_space_indices.append(action_index)
+
+
+    def composite_to_integer_action(self, action_array):
+        integer_action = self.action_space_indices.index(action_array)
+        return integer_action
+
+    def integer_to_composite_action(self, integer_action):
+        action_array = self.action_space_indices[integer_action]
+        action = {
+            'node_or_bond': action_array[0], # 0 for add node, 1 for add edge
+            "node_type": action_array[1],
+            "bond": [action_array[3], action_array[4], action_array[5]], # 0 for negative bond sign, 1 for positive
+            "node_param": action_array[2]
+        }
+        return action
+
+
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         
@@ -89,8 +123,7 @@ class BondGraphEnv(gym.Env):
         causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
         
         if action['node_or_bond'] == 0: # Node addition
-            # element_addition_mask = self.bond_graph.get_element_addition_mask()
-            
+            # element_addition_mask = self.bond_graph.get_element_addition_mask()            
             if element_addition_mask[action['node_type']] == 1:
                 match action['node_type']:
                     case BondGraphElementTypes.CAPACITANCE.value:
@@ -130,7 +163,6 @@ class BondGraphEnv(gym.Env):
 
         else: # Bond addition
             # causal_adjacency_mask, power_flow_adjacency_mask = self.bond_graph.get_bond_addition_mask()
-            
             if causal_adjacency_mask[action['bond'][0], action['bond'][1]] == 1: # check if the causality assignment is valid
                 if action['bond'][2] == 0: # 0 corresponds to negative power sign
                     power_flow_adjacency_mask = power_flow_adjacency_mask.transpose()
