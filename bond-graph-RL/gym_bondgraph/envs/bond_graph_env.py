@@ -12,10 +12,10 @@ from gymnasium.envs.registration import register
 from gymnasium.wrappers import FlattenObservation
 from collections import *
 
-OBJECTIVE_REWARD_SCALING = 100
-VALID_SOLUTION_REWARD = 100
+OBJECTIVE_REWARD_SCALING = 10000
+VALID_SOLUTION_REWARD = 0
 INVALID_SOLUTION_REWARD = -1
-MASKED_ACTION_PENALTY = -10
+MASKED_ACTION_PENALTY = -1
 
 MIN_PARAM_VAL = 1
 MAX_PARAM_VAL = 10
@@ -192,8 +192,9 @@ class BondGraphEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
         
+        
         # Several conditions for terminating episode: no edge additions possible, no element additions possible, or max node size
-        terminated = self.bond_graph.at_max_node_size() and np.all(causal_adjacency_mask == 0) and np.all(element_addition_mask == 0)
+        terminated = self.bond_graph.at_max_node_size() or np.all(causal_adjacency_mask == 0) or np.all(element_addition_mask == 0)
 
 
         return observation, reward, terminated, False, info

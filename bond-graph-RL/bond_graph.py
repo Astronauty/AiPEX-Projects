@@ -391,10 +391,15 @@ class BondGraph():
         
         
         system_equations = []
-        for node in self.flow_causal_graph.nodes:
-            system_equations += self.constitutive_laws(node)
         
         energy_storage_nodes = self.get_energy_storage_elements()
+        
+        # for node in energy_storage_nodes:
+        #     system_equations += self.constitutive_laws(node)
+        for node in self.flow_causal_graph.nodes:
+            # if node not in energy_storage_nodes:
+            system_equations += self.constitutive_laws(node)
+                
 
         for energy_storage_node in energy_storage_nodes:
             match self.flow_causal_graph.nodes[energy_storage_node]['element_type']:
@@ -421,9 +426,24 @@ class BondGraph():
             self.bond_vars.append(self.flow_causal_graph.edges[bond]['f'])
 
         
-        self.A, self.b = linear_eq_to_matrix(system_equations, *self.state_derivative_vars, *self.bond_vars)
-            
+        # Move the equations of self.state_derivative_vars to the beginning of the system_equations list
+        system_equations = [eq for eq in system_equations if any(var in eq.free_symbols for var in self.state_derivative_vars)] + \
+                           [eq for eq in system_equations if all(var not in eq.free_symbols for var in self.state_derivative_vars)]
+        # print(system_equations)
+        
+        # vars = []
+        # for eq in system_equations:
+        #     lhs = eq.lhs
+        #     if lhs not in vars:
+        #         vars.append(lhs)
+        # print("vars: ", vars)
         # print("bond graph states: ", self.state_derivative_vars, self.bond_vars)
+        
+        # print(self.state_derivative_vars)
+        self.A, self.b = linear_eq_to_matrix(system_equations, *self.state_derivative_vars, *self.bond_vars)
+        # self.A, self.b = linear_eq_to_matrix(system_equations, *vars)
+        
+            
         if verbose:
             print("Bond Graph Variables: ")
             print("=====================")
@@ -438,7 +458,7 @@ class BondGraph():
             print("Matrix Formulation (Ax = b): ")
             print("============================")
             print(f"A {self.A.shape}: {self.A}")
-            print(f"b: {self.b.shape}: {self.b}")
+            print(f"b {self.b.shape}: {self.b}")
             print(f"x ({len(self.state_derivative_vars) + len(self.bond_vars)}): {self.state_derivative_vars} {self.bond_vars}")
             
         pass
@@ -450,13 +470,22 @@ class BondGraph():
         
         b = copy.deepcopy(self.b) # Make a copy of b so we don't ovewrite the original sympy variables at each timestep
         
-        b = b.subs(zip(self.state_vars, x[0:len(self.state_vars)])) # Substitute in state variables at the current time step
+        # b = b.subs(zip(self.state_vars, x[0:len(self.state_vars)])) # Substitute in state variables at the current time step
+        # print("State_vars: ", self.state_vars)
+        # print(list(zip(self.state_vars, x)))
+        # print(b)
+        
+        b = b.subs(zip(self.state_vars, x))
+        # print(b)
+        
         b = b.subs(zip(self.control_vars, u(t))) # Substitute in the current control actions
         
+ 
         
-        x = np.linalg.solve(np.array(self.A).astype('float'), np.array(b).astype('float'))
+        x = np.linalg.solve(np.array(self.A).astype('float'), np.array(b).astype('float')) # xdot
         x = x.flatten()
         
+        # print("x: ", x)
         return x[0:len(self.state_derivative_vars)]
     
     def at_max_node_size(self):
@@ -483,7 +512,7 @@ class BondGraph():
             num_effort_successors = len(effort_successors)
             
             node = self.flow_causal_graph.nodes[node_index]
-
+            
             match node['element_type']:
                 case BondGraphElementTypes.CAPACITANCE:
                     if num_flow_predecessors != 1:
@@ -498,7 +527,7 @@ class BondGraph():
                         return False
                 
                 case BondGraphElementTypes.RESISTANCE:
-                    if num_effort_predecessors!=1 or num_flow_predecessors!=1:
+                    if num_effort_predecessors!=1 and num_flow_predecessors!=1:
                         if verbose: print("Resistance") 
                         return False
                     
@@ -528,19 +557,36 @@ class BondGraph():
         
         return True
     
-    
+    def speed_bump_excitation(self, t, L, H, v):
+        if t <= L/v:
+            return -(H/2)*(np.cos(2*np.pi*v*t/L)-1)
+        else:
+            return 0
+
     def reward(self):
-        omega = 2*np.pi*5 
-        u = lambda t: [np.sin(omega*t)]
+        # omega = 2*np.pi*5 
+        # u = lambda t: [np.sin(omega*t)]
+        L = 0.075
+        H = 0.5
+        v = 10
+        u = lambda t: [self.speed_bump_excitation(t, L, H, v)]
+        
         try:
             x0 = np.zeros(len(self.get_energy_storage_elements()))
             y = odeint(self.dynamics, x0, self.time_array, args=(u,))
             
+            # xw = y[:, 1]
+            # xb = y[:, 3]
+            
+            # Peak accel of body
+            # ab = np.gradient(xb)
+            
             # r = np.linalg.norm(y[:,0], np.inf) 
-            r = -np.log10(np.linalg.norm(y[:,0], 2))
+            # r = -np.log10(np.linalg.norm(y[:,0], 2))
+            r = np.linalg.norm(y[:,0], 2)
         except np.linalg.LinAlgError:
             print("Singular value matrix detected. Cannot solve.")
-            r = -1000
+            r = -1
         
         return r
         
