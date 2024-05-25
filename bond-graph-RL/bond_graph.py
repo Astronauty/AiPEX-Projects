@@ -583,7 +583,7 @@ class BondGraph():
             
             # r = np.linalg.norm(y[:,0], np.inf) 
             # r = -np.log10(np.linalg.norm(y[:,0], 2))
-            r = 1.0/np.linalg.norm(y[:,0], np.inf)
+            r = np.linalg.norm(y[:,0], 2)
         except np.linalg.LinAlgError:
             print("Singular value matrix detected. Cannot solve.")
             r = -1
