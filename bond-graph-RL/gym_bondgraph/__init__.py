@@ -22,5 +22,5 @@ register(
 register(
     id='gym_bondgraph/HalfCarSuspEnv',
     entry_point = 'gym_bondgraph.envs:HalfCarSuspEnv',
-    max_episode_steps = 50
+    max_episode_steps = 350
 )

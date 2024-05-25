@@ -66,10 +66,23 @@ class HalfCarSuspEnv(gym.Env):
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.C_sf = 1190
-        self.C_sr = 1000
-        self.k_sf = 66824
-        self.k_sr = 18615
+        ### Nominal
+        # self.C_sf = 1190
+        # self.C_sr = 1000
+        # self.k_sf = 66824
+        # self.k_sr = 18615
+        
+        ### Optimal 
+        # self.C_sf = 2497.9
+        # self.C_sr = 2494.5
+        # self.k_sf = 28949.4
+        # self.k_sr = 11115.7
+
+        ### Close
+        self.C_sf = 2250.0
+        self.C_sr = 2250.0
+        self.k_sf = 2200.0
+        self.k_sr = 11000.0
         
         observation = self._get_obs()
         info = self._get_info()
@@ -82,18 +95,42 @@ class HalfCarSuspEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
+        # if action == 0:
+        #     # Decrement C_sf
+        #     self.C_sf -= 20.0
+        # elif action == 1:
+        #     # Increment C_sf
+        #     self.C_sf += 20.0
+        # elif action == 2:
+        #     # Decrement C_sr
+        #     self.C_sr -= 20.0
+        # elif action == 3:
+        #     # Increment C_sr
+        #     self.C_sr += 20.0
+        # elif action == 4:
+        #     # Decrement k_sf
+        #     self.k_sf -= 50.0
+        # elif action == 5:
+        #     # Increment k_sf
+        #     self.k_sf += 50.0
+        # elif action == 6:
+        #     # Decrement k_sr
+        #     self.k_sr -= 50.0
+        # elif action == 7:
+        #     # Increment k_sr
+        #     self.k_sr += 50.0
         if action == 0:
             # Decrement C_sf
-            self.C_sf -= 1.0
+            self.C_sf -= 2.0
         elif action == 1:
             # Increment C_sf
-            self.C_sf += 1.0
+            self.C_sf += 2.0
         elif action == 2:
             # Decrement C_sr
-            self.C_sr -= 1.0
+            self.C_sr -= 2.0
         elif action == 3:
             # Increment C_sr
-            self.C_sr += 1.0
+            self.C_sr += 2.0
         elif action == 4:
             # Decrement k_sf
             self.k_sf -= 5.0
@@ -109,7 +146,6 @@ class HalfCarSuspEnv(gym.Env):
 
 
 
-
         
         # terminated = self.bond_graph.flow_causal_graph.nodes[8]["params"]["R"] < self.Rmin \
         #     or self.bond_graph.flow_causal_graph.nodes[8]["params"]["R"] > self.Rmax \
@@ -122,18 +158,18 @@ class HalfCarSuspEnv(gym.Env):
         if reward > self.max_reward:
             self.max_reward = reward
 
-        
-        terminated = self.C_sf < self.C_sf_min \
-            or self.C_sf > self.C_sf_max \
-            or self.C_sr < self.C_sr_min \
-            or self.C_sr > self.C_sr_max \
-            or self.k_sf < self.k_sf_min \
-            or self.k_sf > self.k_sf_max \
-            or self.k_sr < self.k_sr_min \
-            or self.k_sr > self.k_sr_max
+        terminated = False
+        # terminated = self.C_sf < self.C_sf_min \
+        #     or self.C_sf > self.C_sf_max \
+        #     or self.C_sr < self.C_sr_min \
+        #     or self.C_sr > self.C_sr_max \
+        #     or self.k_sf < self.k_sf_min \
+        #     or self.k_sf > self.k_sf_max \
+        #     or self.k_sr < self.k_sr_min \
+        #     or self.k_sr > self.k_sr_max
                 
         # if terminated:
-        #     reward = -10
+        #     reward = -1
             
             
         return observation, self.max_reward, terminated, False, info
@@ -251,5 +287,6 @@ class HalfCarSuspEnv(gym.Env):
 
 
     def _get_info(self):
-        return {"z": self.z}
+ 
+        return {"z": self.z, "params":self._get_obs()}
         
