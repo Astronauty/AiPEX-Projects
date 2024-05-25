@@ -83,15 +83,16 @@ class QuarterCarSuspEnv(gym.Env):
         #     or self.bond_graph.flow_causal_graph.nodes[8]["params"]["R"] > self.Rmax \
         #     or 1.0/self.bond_graph.flow_causal_graph.nodes[7]["params"]["C"] < self.Kmin \
         #     or 1.0/self.bond_graph.flow_causal_graph.nodes[7]["params"]["C"] > self.Kmax
-        reward = 100.0/self.quarter_suspension_reward()
+        # reward = 100.0/self.quarter_suspension_reward()
+        reward = 1000*self.quarter_suspension_reward()^(-2)
         
         terminated = self.R < self.Rmin \
             or self.R > self.Rmax \
             or self.Kmin < self.Kmin \
             or self.Kmax > self.Kmax \
                 
-        if terminated:
-            reward = -10
+        # if terminated:
+        #     reward = -10
             
             
         return observation, reward, terminated, False, info

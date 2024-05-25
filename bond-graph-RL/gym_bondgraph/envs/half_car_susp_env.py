@@ -32,16 +32,16 @@ class HalfCarSuspEnv(gym.Env):
         self.b2 = 1.713
 
         ### Nominal
-        self.C_sf = 1190
-        self.C_sr = 1000
-        self.k_sf = 66824
-        self.k_sr = 18615
+        # self.C_sf = 1190
+        # self.C_sr = 1000
+        # self.k_sf = 66824
+        # self.k_sr = 18615
 
         ### Optimal 
-        # self.C_sf = 2497.9
-        # self.C_sr = 2494.5
-        # self.k_sf = 28949.4
-        # self.k_sr = 11115.7
+        self.C_sf = 2497.9
+        self.C_sr = 2494.5
+        self.k_sf = 28949.4
+        self.k_sr = 11115.7
 
         ### Parameter Ranges
         self.C_sf_min = 1000
@@ -58,10 +58,11 @@ class HalfCarSuspEnv(gym.Env):
         ### Action space definition
         self.action_space = spaces.Discrete(8, start=0, seed=seed) # increment/decrement the two suspension parameters
             
-        self.observation_space = spaces.Box(low=np.array([self.Rmin, 1.0/self.Kmax]), high=np.array([self.Rmax , 1.0/self.Kmin]), dtype=np.float64)
+        self.observation_space = spaces.Box(low=np.array([self.C_sf_min, self.C_sr_min, self.k_sf_min, self.k_sr_min]), high=np.array([self.C_sf_max, self.C_sr_max, self.k_sf_max, self.k_sr_max]), dtype=np.float64)
 
         self.render_mode = None
 
+        self.max_reward = -99999
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -72,6 +73,7 @@ class HalfCarSuspEnv(gym.Env):
         
         observation = self._get_obs()
         info = self._get_info()
+        self.max_reward = -99999
         
         return observation, info
 
@@ -94,16 +96,16 @@ class HalfCarSuspEnv(gym.Env):
             self.C_sr += 1.0
         elif action == 4:
             # Decrement k_sf
-            self.k_sf -= 1.0
+            self.k_sf -= 5.0
         elif action == 5:
             # Increment k_sf
-            self.k_sf += 1.0
+            self.k_sf += 5.0
         elif action == 6:
             # Decrement k_sr
-            self.k_sr -= 1.0
+            self.k_sr -= 5.0
         elif action == 7:
             # Increment k_sr
-            self.k_sr += 1.0
+            self.k_sr += 5.0
 
 
 
@@ -113,24 +115,30 @@ class HalfCarSuspEnv(gym.Env):
         #     or self.bond_graph.flow_causal_graph.nodes[8]["params"]["R"] > self.Rmax \
         #     or 1.0/self.bond_graph.flow_causal_graph.nodes[7]["params"]["C"] < self.Kmin \
         #     or 1.0/self.bond_graph.flow_causal_graph.nodes[7]["params"]["C"] > self.Kmax
-        reward = 100.0/self.quarter_suspension_reward()
+        # reward = 1000.0/self.half_suspension_reward()
+        # reward = 1000*np.power(self.half_suspension_reward(), -2)
+        reward = -self.half_suspension_reward()
+        
+        if reward > self.max_reward:
+            self.max_reward = reward
+
         
         terminated = self.C_sf < self.C_sf_min \
             or self.C_sf > self.C_sf_max \
             or self.C_sr < self.C_sr_min \
-            or self.C_sr > self.Csr_max \
+            or self.C_sr > self.C_sr_max \
             or self.k_sf < self.k_sf_min \
             or self.k_sf > self.k_sf_max \
             or self.k_sr < self.k_sr_min \
             or self.k_sr > self.k_sr_max
                 
-        if terminated:
-            reward = -10
+        # if terminated:
+        #     reward = -10
             
             
-        return observation, reward, terminated, False, info
+        return observation, self.max_reward, terminated, False, info
         
-    def speed_bump_excitation(t):
+    def speed_bump_excitation(self, t):
         H = 0.075
         L = 0.5
         KPH_to_MPS = 1.0/3.6
@@ -162,19 +170,18 @@ class HalfCarSuspEnv(gym.Env):
         xb = z[6]
         xb_dot = z[7]
         
-        xf_ddot = (1/self.m_wf)*(-self.C_sf*(self.xf_dot+self.b1*self.phi_dot-self.xb_dot) - self.k_sf*(self.xf+self.b1*self.phi-self.xb) - self.k_tf*self.xf + self.k_tf*u(t)[0])
-        xr_ddot = (1/self.m_wr)*(-self.C_sr*(self.xr_dot+self.b2*self.phi_dot-self.xb_dot) - self.k_sr*(self.xr-self.b2*self.phi-self.xb) - self.k_tr*self.xr + self.k_tr*u(t)[1])
-        phi_ddot = (1/self.I)*(-self.C_sf*self.b1*(self.b1*self.phi_dot+self.xf_dot-self.xb_dot) - self.C_sr*self.b2*(self.b2*self.phi_dot-self.xr_dot+self.xb_dot) - self.k_sf*self.b1*(self.b1*self.phi+self.xf-self.xb) - self.k_sr*self.b2*(self.b2*self.phi-self.xr+self.xb))
-        xb_ddot = (1/self.m_b)*(-self.C_sf*(self.xb_dot-self.b1*self.phi_dot-self.xf_dot) - self.C_sr*(self.xb_dot+self.b2*self.phi_dot-self.xr_dot) - self.k_sf*(self.xb-self.b1*self.phi-self.xf) - self.k_sr*(self.xb+self.b2*self.phi-self.xr))
-        
+        xf_ddot = (1/self.m_wf)*(-self.C_sf*(xf_dot+self.b1*phi_dot-xb_dot) - self.k_sf*(xf+self.b1*phi-xb) - self.k_tf*xf + self.k_tf*self.speed_bump_excitation(t)[0])
+        xr_ddot = (1/self.m_wr)*(-self.C_sr*(xr_dot+self.b2*phi_dot-xb_dot) - self.k_sr*(xr-self.b2*phi-xb) - self.k_tr*xr + self.k_tr*self.speed_bump_excitation(t)[1])
+        phi_ddot = (1/self.I)*(-self.C_sf*self.b1*(self.b1*phi_dot+xf_dot-xb_dot) - self.C_sr*self.b2*(self.b2*phi_dot-xr_dot+xb_dot) - self.k_sf*self.b1*(self.b1*phi+xf-xb) - self.k_sr*self.b2*(self.b2*phi-xr+xb))
+        xb_ddot = (1/self.m_b)*(-self.C_sf*(xb_dot-self.b1*phi_dot-xf_dot) - self.C_sr*(xb_dot+self.b2*phi_dot-xr_dot) - self.k_sf*(xb-self.b1*phi-xf) - self.k_sr*(xb+self.b2*phi-xr))
         return[xf_dot, xf_ddot, xr_dot, xr_ddot, phi_dot, phi_ddot, xb_dot, xb_ddot]
         
     def half_suspension_reward(self):
         z0 = np.zeros(8)
         z = integrate.odeint(self.half_car_dynamics, np.array(z0), self.t, args=(self.speed_bump_excitation,))
+        self.z = z
         
-        
-        dt = t[1] - t[0]
+        dt = self.t[1] - self.t[0]
 
         xf = z[:, 0]
         xf_dot = z[:, 1]
@@ -194,7 +201,7 @@ class HalfCarSuspEnv(gym.Env):
         # print("J1: ", J1)
 
         ## J2: Peak dynamic load
-        u = np.array([self.speed_bump_excitation(t_i) for t_i in t])
+        u = np.array([self.speed_bump_excitation(t_i) for t_i in self.t])
 
         # print(u[:,0].shape)
         # print(xf.shape)
@@ -206,7 +213,7 @@ class HalfCarSuspEnv(gym.Env):
         # print("J3: ", J3)
 
         ## J4: Settling time
-        crossing_times = [t[i] for i in range(len(xb)) if abs(xb[i]) >= 0.0001]
+        crossing_times = [self.t[i] for i in range(len(xb)) if abs(xb[i]) >= 0.0001]
         last_crossing_time = crossing_times[-1] if crossing_times else None
         # print(last_crossing_time)
         J4 = last_crossing_time
@@ -239,7 +246,7 @@ class HalfCarSuspEnv(gym.Env):
         return J_overall
     
     def _get_obs(self):
-        observation = np.array([self.R, self.K])
+        observation = np.array([self.C_sf, self.C_sr, self.k_sf, self.k_sr])
         return observation
 
 

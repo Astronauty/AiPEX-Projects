@@ -12,8 +12,8 @@ from gymnasium.envs.registration import register
 from gymnasium.wrappers import FlattenObservation
 from collections import *
 
-OBJECTIVE_REWARD_SCALING = 10000
-VALID_SOLUTION_REWARD = 0
+OBJECTIVE_REWARD_SCALING = 1000
+VALID_SOLUTION_REWARD = 10
 INVALID_SOLUTION_REWARD = -1
 MASKED_ACTION_PENALTY = -1
 
