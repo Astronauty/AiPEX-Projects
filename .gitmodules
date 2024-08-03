@@ -1,0 +1,3 @@
+[submodule "tutorials/PINNs/pinns"]
+	path = tutorials/PINNs/pinns
+	url = git@github.com:TheodoreWolf/pinns.git
