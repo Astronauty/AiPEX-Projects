@@ -2,6 +2,7 @@ import pandas as pd
 import torch
 import seaborn as sns
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import time
 
 from tqdm import tqdm
@@ -57,7 +58,6 @@ class POCPSolver():
         if verbose:
             print(f"Model structure: {self.model}\n\n")
 
-        self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
 
     def _train_loop(self, loss_fn, optimizer):
@@ -105,15 +105,18 @@ class POCPSolver():
 
         return test_loss
     
-    def train(self):
+    def train(self, path=None):
         learning_rate = 5e-3
         batch_size = 64
         epochs = 100
+        
+        self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
         loss_fn = nn.MSELoss()
         optimizer = torch.optim.SGD(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
+        print("Fitting NLP data with neural network...")
         for t in tqdm(range(epochs)):
             # print(f"Epoch {t+1}\n-------------------------------")
             train_loss = self._train_loop(loss_fn, optimizer)
@@ -126,10 +129,21 @@ class POCPSolver():
         self.writer.flush()
         self.writer.close()
 
+        if path:
+            torch.save(self.model.state_dict(), path)
+        
+
     def load_model(self, path):
-        self.model.load_state_dict(torch.load(path))
-    
+        try:
+            self.model = torch.load(path)
+            print("Model loaded successfully!")
+        except Exception as e:
+            print(f"Error loading model: {e}")
+
     def compare_trajectories(self, idx):
+        """
+        Compares the neural network warmstart trajectory with the trajectory obtained from the NLP solution test set.
+        """
         assert idx < len(self.test_data)
 
         plt.figure(figsize=(10,6))
@@ -140,12 +154,49 @@ class POCPSolver():
 
         with torch.no_grad():
             Z = self.model(test_param)
+        Z = Z.detach().cpu().numpy()
 
         plt.plot(self.t_vec, Z[self.idx.X][:,:2], linewidth=3.0)
         plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,0], '--', linewidth=3.0, color='tab:blue')
         plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,1], '--', linewidth=3.0, color='tab:orange')
+        # font = {'family' : 'sans-serif',
+        # 'weight' : 'normal',
+        # 'size'   : 14}
+
+        # plt.grid(True)
+        # mpl.rc('font', **font)
+
+        plt.xlabel('Time (s)')
+        plt.ylabel('State')
+        plt.legend(['x', r'$\theta$', 'x (NLP)', r'$\theta$ (NLP)'])
+
 
     def compare_controls(self, idx):
+        assert idx < len(self.test_data)
+
+        plt.figure(figsize=(10,6))
+        test_param  = torch.from_numpy(self.test_data.df.iloc[idx].params)
+        test_param = test_param.to(self.device)
+
+        self.model.eval()
+
+        with torch.no_grad():
+            Z = self.model(test_param)
+        Z = Z.detach().cpu().numpy()
+
+        plt.plot(self.t_vec, Z[self.idx.X][:,:2], linewidth=3.0)
+        plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,0], '--', linewidth=3.0, color='tab:blue')
+        plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,1], '--', linewidth=3.0, color='tab:orange')
+        # font = {'family' : 'sans-serif',
+        # 'weight' : 'normal',
+        # 'size'   : 14}
+
+        # plt.grid(True)
+        # mpl.rc('font', **font)
+
+        plt.xlabel('Time (s)')
+        plt.ylabel('State')
+        plt.legend(['x', r'$\theta$', 'x (NLP)', r'$\theta$ (NLP)'])
         return None
     
     def store_warmstart_trajectories(self, path):
@@ -174,6 +225,14 @@ class POCPSolver():
 
         warmstart_df.to_csv(path)
 
+    def compare_solve_time(self):
+        warmstart_df = self.test_data.df
+        plt.figure(figsize=(10, 6))
+        sns.histplot(warmstart_df['solve_time_sec'], bins=30, kde=True)
+        plt.xlabel('Solve Time (seconds)')
+        plt.ylabel('Count')
+        plt.title('NLP Presolve Time Distribution')
+        plt.show()
 
 
 
