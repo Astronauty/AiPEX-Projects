@@ -53,8 +53,8 @@ class POCPSolver():
         self.train_data = NLPDataset(path, train=True)
         self.test_data = NLPDataset(path, train=False)
 
-        self.train_dataloader = DataLoader(self.train_data, batch_size=16, shuffle=True)        
-        self.test_dataloader = DataLoader(self.test_data, batch_size=16, shuffle=True)
+        self.train_dataloader = DataLoader(self.train_data, batch_size=1, shuffle=True)        
+        self.test_dataloader = DataLoader(self.test_data, batch_size=1, shuffle=True)
         
         # Trajectory info
         self.t_vec = np.linspace(0, nlp_params.tf, nlp_params.N)
@@ -81,10 +81,11 @@ class POCPSolver():
 
             z_pred = self.model(params)
             loss = loss_fn(z_pred, z_actual)
-            
-            if self.eq_constraint_fn:
+
+            if self.eq_constraint_fn is not None:
                 eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
-                loss += eq_loss
+                eq_loss = torch.tensor(eq_loss, device=self.device)
+                loss += 100*eq_loss
 
             # Backprop
             loss.backward()
@@ -122,7 +123,7 @@ class POCPSolver():
     def train(self, path=None):
         learning_rate = 5e-3
         batch_size = 64
-        epochs = 100
+        epochs = 10
         
         self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
@@ -157,7 +158,8 @@ class POCPSolver():
             
     def load_model(self, path):
         try:
-            self.model = torch.load(path)
+            # self.model = torch.load(path)
+            self.model.load_state_dict(torch.load(path))
             print("Model loaded successfully!")
         except Exception as e:
             print(f"Error loading model: {e}")

@@ -13,17 +13,22 @@ def dynamics(params, x, u):
     s = np.sin(q[1])
     c = np.cos(q[1])
 
-    print(x.shape)
+    # print("q:" , q)
     # print(mc)
     # print(mp)
     # print(l)
-    print(s)
-    print(c)
+    # print(s)
+    # print(c)
     # print([mc+mp, mp*l*c])
     # print([mp*l*c, mp*l**2])
+    
     H = np.array([[mc+mp, mp*l*c], [mp*l*c, mp*l**2]])
+    # H = np.vstack([np.hstack([mc+mp, mp*l*c]), np.hstack([mp*l*c, mp*l**2])])
+
     C = np.array([[0, -mp*qd[1]*l*s], [0, 0]])
+    # C = np.vstack([np.hstack([0, -mp*qd[1]*l*s]), np.hstack([0, 0])])
     G = np.array([0, mp*g*l*s])
+    # G = np.hstack([0, mp*g*l*s])
     B = np.array([1, 0])
 
     # qdd = -np.linalg.inv(H) @ (C @ qd + G - B * u[1])
@@ -44,20 +49,27 @@ def cartpole_dynamics_constraints(params, Z):
     idx, N, dt = params.idx, params.N, params.dt
     
     Z = Z.detach().cpu().numpy()
+    Z = Z.flatten()
+
     # TODO: create dynamics constraints using hermite simpson 
 
     # create c in a ForwardDiff friendly way (check HW0)
-    c = np.zeros(idx.nc, dtype=type(Z))
-    
+    c = np.zeros(idx.nc, dtype=np.double)
+
     for i in range(0, N-1):
         xi = Z[idx.X[i]]
         ui = Z[idx.U[i]] 
         xip1 = Z[idx.X[i+1]]
+
+        # print('xi: ', xi)   
+        # print('ui: ', ui)
         
         # TODO: hermite simpson 
         c[idx.c[i]] = hermite_simpson(params, xi, xip1, ui, dt)
 
-    return c 
+    l2_norm = np.linalg.norm(c)
+    # return c 
+    return l2_norm
 
 
 # def cartpole_equality_constraint(params, Z):
