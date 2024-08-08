@@ -4,6 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import time
+import numpy as np
 
 from tqdm import tqdm
 from torch import nn
@@ -36,8 +37,9 @@ class POCPSolver():
     """
     Loads pre-solved NLP data and trains a neural network to solve the NLP. Computes statistics and visualizations regarding the solutions.
     """
-    def __init__(self, path, t_vec, nx, nu, N, verbose=False, eq_constraint_loss=None, ineq_constraint_loss=None):
+    def __init__(self, path, nlp_params, verbose=False, eq_constraint_fn=None, ineq_constraint_fn=None):
         sns.set_theme()
+        self.nlp_params = nlp_params
 
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -45,11 +47,13 @@ class POCPSolver():
         self.test_data = NLPDataset(path, train=False)
 
         self.train_dataloader = DataLoader(self.train_data, batch_size=16, shuffle=True)
+        
+        
         self.test_dataloader = DataLoader(self.test_data, batch_size=16, shuffle=True)
         # Trajectory info
-        self.t_vec = t_vec
-        self.idx = create_idx(nx, nu, N)
-
+        self.t_vec = np.linspace(0, nlp_params.tf, nlp_params.N)
+        self.idx = nlp_params.idx
+            
         # Create NN
         self.n_params = self.train_data.n_params
         self.n_traj = self.train_data.n_traj
@@ -129,10 +133,14 @@ class POCPSolver():
         self.writer.flush()
         self.writer.close()
 
-        if path:
-            torch.save(self.model.state_dict(), path)
         
-
+    def save_model(self, path):
+        try:
+            torch.save(self.model.state_dict(), path)
+            print("Model saved successfully!")
+        except Exception as e:
+            print(f"Error saving model: {e}")
+            
     def load_model(self, path):
         try:
             self.model = torch.load(path)
