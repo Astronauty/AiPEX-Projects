@@ -13,6 +13,14 @@ def dynamics(params, x, u):
     s = np.sin(q[1])
     c = np.cos(q[1])
 
+    print(x.shape)
+    # print(mc)
+    # print(mp)
+    # print(l)
+    print(s)
+    print(c)
+    # print([mc+mp, mp*l*c])
+    # print([mp*l*c, mp*l**2])
     H = np.array([[mc+mp, mp*l*c], [mp*l*c, mp*l**2]])
     C = np.array([[0, -mp*qd[1]*l*s], [0, 0]])
     G = np.array([0, mp*g*l*s])
@@ -35,6 +43,7 @@ def hermite_simpson(params, x1, x2, u, dt):
 def cartpole_dynamics_constraints(params, Z):
     idx, N, dt = params.idx, params.N, params.dt
     
+    Z = Z.detach().cpu().numpy()
     # TODO: create dynamics constraints using hermite simpson 
 
     # create c in a ForwardDiff friendly way (check HW0)

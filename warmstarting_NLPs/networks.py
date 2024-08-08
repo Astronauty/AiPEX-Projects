@@ -39,17 +39,23 @@ class POCPSolver():
     """
     def __init__(self, path, nlp_params, verbose=False, eq_constraint_fn=None, ineq_constraint_fn=None):
         sns.set_theme()
+        
+        # Load in equality and inequality constraint functions if PINNs style regularization is desired
+        self.eq_constraint_fn = eq_constraint_fn
+        self.ineq_constraint_fn = ineq_constraint_fn
+        
+        # Load the parameters that governed the NLP solve
         self.nlp_params = nlp_params
-
+        
+        # Set up data loaders for machine learning regression
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
         self.train_data = NLPDataset(path, train=True)
         self.test_data = NLPDataset(path, train=False)
 
-        self.train_dataloader = DataLoader(self.train_data, batch_size=16, shuffle=True)
-        
-        
+        self.train_dataloader = DataLoader(self.train_data, batch_size=16, shuffle=True)        
         self.test_dataloader = DataLoader(self.test_data, batch_size=16, shuffle=True)
+        
         # Trajectory info
         self.t_vec = np.linspace(0, nlp_params.tf, nlp_params.N)
         self.idx = nlp_params.idx
@@ -69,12 +75,16 @@ class POCPSolver():
         self.model.train()
 
         train_loss = 0
-        for batch, (X,y) in enumerate(self.train_dataloader):
-            X = X.to(self.device)
-            y = y.to(self.device)
+        for batch, (params, z_actual) in enumerate(self.train_dataloader):
+            params = params.to(self.device) # parameters
+            z_actual = z_actual.to(self.device) # actual trajectories
 
-            pred = self.model(X)
-            loss = loss_fn(pred, y)
+            z_pred = self.model(params)
+            loss = loss_fn(z_pred, z_actual)
+            
+            if self.eq_constraint_fn:
+                eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
+                loss += eq_loss
 
             # Backprop
             loss.backward()
@@ -116,7 +126,11 @@ class POCPSolver():
         
         self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
+        # loss_fn = nn.MSELoss()
+
         loss_fn = nn.MSELoss()
+
+        
         optimizer = torch.optim.SGD(self.model.parameters(), lr=learning_rate, weight_decay=1e-5)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
 
