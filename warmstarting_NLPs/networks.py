@@ -75,18 +75,25 @@ class POCPSolver():
         self.model.train()
 
         train_loss = 0
+        dynamics_eq_loss = 0
+
+
         for batch, (params, z_actual) in enumerate(self.train_dataloader):
             params = params.to(self.device) # parameters
             z_actual = z_actual.to(self.device) # actual trajectories
 
             z_pred = self.model(params)
-            loss = loss_fn(z_pred, z_actual)
+            # loss = loss_fn(z_pred, z_actual)
+
 
             if self.eq_constraint_fn is not None:
                 eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
-                eq_loss = torch.tensor(eq_loss, device=self.device)
-                loss += 100*eq_loss
+                # eq_loss = torch.tensor(eq_loss, device=self.device)
 
+                dynamics_eq_loss += eq_loss.item()
+
+                # loss += 100*eq_loss.item()
+                loss = eq_loss
             # Backprop
             loss.backward()
             optimizer.step()
@@ -95,9 +102,10 @@ class POCPSolver():
             train_loss += loss.item()
 
         train_loss /= len(self.train_dataloader)
+        dynamics_eq_loss /= len(self.train_dataloader)
         # loss, current = loss.item(), batch * len(X)
         # print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-        return train_loss
+        return train_loss, dynamics_eq_loss
             
 
     def _test_loop(self, loss_fn):
@@ -123,7 +131,7 @@ class POCPSolver():
     def train(self, path=None):
         learning_rate = 5e-3
         batch_size = 64
-        epochs = 10
+        epochs = 1
         
         self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
@@ -138,9 +146,10 @@ class POCPSolver():
         print("Fitting NLP data with neural network...")
         for t in tqdm(range(epochs)):
             # print(f"Epoch {t+1}\n-------------------------------")
-            train_loss = self._train_loop(loss_fn, optimizer)
+            train_loss, dynamics_eq_loss = self._train_loop(loss_fn, optimizer)
             scheduler.step()
             self.writer.add_scalar('train loss x epoch', train_loss, t)
+            self.writer.add_scalar('dynamics eq loss x epoch', dynamics_eq_loss, t)
 
             test_loss = self._test_loop(loss_fn)
             self.writer.add_scalar('test loss x epoch', test_loss, t)
