@@ -68,7 +68,7 @@ def cartpole_dynamics_constraints(params, Z):
 
     # create c in a ForwardDiff friendly way (check HW0)
     # c = np.zeros(idx.nc, dtype=np.double)
-    c = torch.zeros(idx.nc, dtype=torch.double, device=device)
+    c = torch.zeros(idx.nc, dtype=torch.float32, device=device)
 
     for i in range(0, N-1):
         xi = Z[idx.X[i]]
