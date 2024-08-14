@@ -13,7 +13,7 @@ class NLPDataset(Dataset):
         array_elements = ['params', 'X', 'U']
         for elem in array_elements:
             self.df[elem] = self.df[elem].apply(literal_eval) # Convert strings into lists 
-            self.df[elem] = self.df[elem].apply(lambda x: np.array(x, dtype=np.float64)) # Convert lists into np arrays of type np.float64
+            self.df[elem] = self.df[elem].apply(lambda x: np.array(x, dtype=np.float32)) # Convert lists into np arrays of type np.float64
 
         # Split the data into training and testing sets
         train_df, test_df = train_test_split(self.df, test_size=0.2, random_state=1) # Rand state so that when we create train-test split datasets they dont overlap
@@ -42,7 +42,7 @@ class NLPDataset(Dataset):
         X = self.df.iloc[idx].X
         U = self.df.iloc[idx].U
         
-        Z = np.array([np.hstack((X[i], U[i])) for i in range(len(U))], dtype=np.float64) # create the trajectory vector where element z_i = [x_i, u_i]
+        Z = np.array([np.hstack((X[i], U[i])) for i in range(len(U))], dtype=np.float32) # create the trajectory vector where element z_i = [x_i, u_i]
         Z = Z.flatten()
         Z = np.concatenate((Z, X[-1])) # add the final state to the end of the trajectory
 

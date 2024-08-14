@@ -25,7 +25,7 @@ class CartpoleNN(nn.Module):
             nn.ReLU(),
             nn.Linear(256, n_traj)
         )
-        self.linear_relu_stack = self.linear_relu_stack.double()
+        self.linear_relu_stack = self.linear_relu_stack.float32()
 
         
     def forward(self, params):
@@ -79,21 +79,19 @@ class POCPSolver():
 
 
         for batch, (params, z_actual) in enumerate(self.train_dataloader):
-            params = params.to(self.device) # parameters
+            params = params.to(self.device).float() # parameters 
             z_actual = z_actual.to(self.device) # actual trajectories
 
             z_pred = self.model(params)
-            # loss = loss_fn(z_pred, z_actual)
-
+            loss = loss_fn(z_pred, z_actual)
 
             if self.eq_constraint_fn is not None:
                 eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
                 # eq_loss = torch.tensor(eq_loss, device=self.device)
+                loss += eq_loss
 
-                dynamics_eq_loss += eq_loss.item()
-
-                # loss += 100*eq_loss.item()
-                loss = eq_loss
+                dynamics_eq_loss += eq_loss.item() 
+                
             # Backprop
             loss.backward()
             optimizer.step()
@@ -128,10 +126,10 @@ class POCPSolver():
 
         return test_loss
     
-    def train(self, path=None):
+    def train(self, epochs, path=None):
         learning_rate = 5e-3
         batch_size = 64
-        epochs = 1
+        epochs = epochs
         
         self.writer = SummaryWriter(f'runs/cartpole-{time.strftime("%Y%m%d-%H%M%S")}')
 
