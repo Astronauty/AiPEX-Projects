@@ -19,13 +19,12 @@ class CartpoleNN(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(n_params, 256),
+            nn.Linear(n_params, 512),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(256, n_traj)
+            nn.Linear(512, n_traj)
         )
-        self.linear_relu_stack = self.linear_relu_stack.float32()
 
         
     def forward(self, params):
@@ -88,7 +87,7 @@ class POCPSolver():
             if self.eq_constraint_fn is not None:
                 eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
                 # eq_loss = torch.tensor(eq_loss, device=self.device)
-                loss += eq_loss
+                loss += 10*eq_loss
 
                 dynamics_eq_loss += eq_loss.item() 
                 

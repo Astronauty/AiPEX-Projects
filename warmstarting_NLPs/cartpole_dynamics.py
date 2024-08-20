@@ -27,15 +27,15 @@ def dynamics(params, x, u):
     
     # H = np.array([[mc+mp, mp*l*c], [mp*l*c, mp*l**2]])
     # H = np.vstack([np.hstack([mc+mp, mp*l*c]), np.hstack([mp*l*c, mp*l**2])])
-    H = torch.tensor([[mc+mp, mp*l*c], [mp*l*c, mp*l**2]], device=device, requires_grad=True)
+    H = torch.tensor([[mc+mp, mp*l*c], [mp*l*c, mp*l**2]], device=device)
 
     # C = np.array([[0, -mp*qd[1]*l*s], [0, 0]])
     # C = np.vstack([np.hstack([0, -mp*qd[1]*l*s]), np.hstack([0, 0])])
-    C = torch.tensor([[0, -mp*qd[1]*l*s], [0, 0]], device=device, requires_grad=True)
+    C = torch.tensor([[0, -mp*qd[1]*l*s], [0, 0]], device=device)
 
     # G = np.array([0, mp*g*l*s])
     # G = np.hstack([0, mp*g*l*s])
-    G = torch.tensor([0, mp*g*l*s], device=device, requires_grad=True)
+    G = torch.tensor([0, mp*g*l*s], device=device)
 
     # B = np.array([1, 0])
     B = torch.tensor([1, 0], device=device)
