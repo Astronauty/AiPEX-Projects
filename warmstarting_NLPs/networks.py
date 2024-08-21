@@ -82,7 +82,8 @@ class POCPSolver():
             z_actual = z_actual.to(self.device) # actual trajectories
 
             z_pred = self.model(params)
-            loss = loss_fn(z_pred, z_actual)
+            # loss = loss_fn(z_pred, z_actual)
+            loss = 0
 
             if self.eq_constraint_fn is not None:
                 eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
