@@ -19,12 +19,13 @@ class CartpoleNN(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(n_params, 512),
+            nn.Linear(n_params, 256),
             nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(512, n_traj)
+            nn.Linear(256, n_traj)
         )
+        # self.linear_relu_stack = self.linear_relu_stack.float32()
 
         
     def forward(self, params):
@@ -37,7 +38,7 @@ class POCPSolver():
     Loads pre-solved NLP data and trains a neural network to solve the NLP. Computes statistics and visualizations regarding the solutions.
     """
     def __init__(self, path, nlp_params, verbose=False, eq_constraint_fn=None, ineq_constraint_fn=None):
-        sns.set_theme()
+        sns.set_theme(style="dark")
         
         # Load in equality and inequality constraint functions if PINNs style regularization is desired
         self.eq_constraint_fn = eq_constraint_fn
@@ -48,6 +49,7 @@ class POCPSolver():
         
         # Set up data loaders for machine learning regression
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # self.device = 'cpu'
 
         self.train_data = NLPDataset(path, train=True)
         self.test_data = NLPDataset(path, train=False)
@@ -73,37 +75,40 @@ class POCPSolver():
         size = len(self.train_dataloader.dataset)
         self.model.train()
 
-        train_loss = 0
-        dynamics_eq_loss = 0
+        train_loss = 0 # total loss per epoch
+        mse_loss = 0 # mse between optimal and predicted trajectory
+        dynamics_eq_loss = 0 # violation of the dynamics equality constraint 
 
 
         for batch, (params, z_actual) in enumerate(self.train_dataloader):
             params = params.to(self.device).float() # parameters 
             z_actual = z_actual.to(self.device) # actual trajectories
-
             z_pred = self.model(params)
-            # loss = loss_fn(z_pred, z_actual)
-            loss = 0
-
+            
+            batch_mse_loss = loss_fn(z_pred, z_actual)
+            mse_loss += batch_mse_loss.item()
+            
             if self.eq_constraint_fn is not None:
-                eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
-                # eq_loss = torch.tensor(eq_loss, device=self.device)
-                loss += 10*eq_loss
-
-                dynamics_eq_loss += eq_loss.item() 
+                batch_eq_loss = self.eq_constraint_fn(self.nlp_params, z_pred)
+                dynamics_eq_loss += batch_eq_loss.item() 
                 
+            
+            loss = 0
+            loss = batch_mse_loss + 0.1*batch_eq_loss
+            
             # Backprop
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
             train_loss += loss.item()
-
+            
+        mse_loss /= len(self.train_dataloader)
         train_loss /= len(self.train_dataloader)
         dynamics_eq_loss /= len(self.train_dataloader)
         # loss, current = loss.item(), batch * len(X)
         # print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-        return train_loss, dynamics_eq_loss
+        return train_loss, mse_loss, dynamics_eq_loss
             
 
     def _test_loop(self, loss_fn):
@@ -144,9 +149,10 @@ class POCPSolver():
         print("Fitting NLP data with neural network...")
         for t in tqdm(range(epochs)):
             # print(f"Epoch {t+1}\n-------------------------------")
-            train_loss, dynamics_eq_loss = self._train_loop(loss_fn, optimizer)
+            train_loss, mse_loss, dynamics_eq_loss = self._train_loop(loss_fn, optimizer)
             scheduler.step()
             self.writer.add_scalar('train loss x epoch', train_loss, t)
+            self.writer.add_scalar('mse loss x epoch', mse_loss, t)
             self.writer.add_scalar('dynamics eq loss x epoch', dynamics_eq_loss, t)
 
             test_loss = self._test_loop(loss_fn)
@@ -186,7 +192,8 @@ class POCPSolver():
         with torch.no_grad():
             Z = self.model(test_param)
         Z = Z.detach().cpu().numpy()
-
+        
+        print(Z[self.idx.X][:,:2].shape)
         plt.plot(self.t_vec, Z[self.idx.X][:,:2], linewidth=3.0)
         plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,0], '--', linewidth=3.0, color='tab:blue')
         plt.plot(self.t_vec, self.test_data.df.iloc[idx].X[:,1], '--', linewidth=3.0, color='tab:orange')
@@ -259,7 +266,9 @@ class POCPSolver():
     def compare_solve_time(self):
         warmstart_df = self.test_data.df
         plt.figure(figsize=(10, 6))
-        sns.histplot(warmstart_df['solve_time_sec'], bins=30, kde=True)
+        # sns.histplot(warmstart_df['solve_time_sec'], bins=30, kde=True)
+        filtered_df = warmstart_df[warmstart_df['solve_time_sec'] < 5]
+        sns.violinplot(filtered_df['solve_time_sec'])
         plt.xlabel('Solve Time (seconds)')
         plt.ylabel('Count')
         plt.title('NLP Presolve Time Distribution')
