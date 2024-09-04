@@ -94,7 +94,8 @@ class POCPSolver():
                 
             
             loss = 0
-            loss = batch_mse_loss + 0.1*batch_eq_loss
+            # loss = batch_mse_loss + 0.1*batch_eq_loss
+            loss = batch_mse_loss
             
             # Backprop
             loss.backward()
